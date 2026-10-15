@@ -9,6 +9,9 @@ dependencies = [
     # "sightrag>=0.1.0",
     "pillow>=10.0.0",
     "numpy>=1.26.0",
+    # ONNX runtime for the default vision model. Pre-built wheels for
+    # Linux x86_64, Linux aarch64 (Pi 5, Jetson), and macOS Apple Silicon.
+    "onnxruntime>=1.18.0",
 ]
 
 [project.scripts]

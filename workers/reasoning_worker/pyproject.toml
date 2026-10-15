@@ -6,11 +6,15 @@ requires-python = ">=3.11"
 dependencies = [
     "arikizu-worker-sdk",
     "httpx>=0.27.0",
-    # Local GGUF inference. Pre-built wheels for Linux x86_64, aarch64,
-    # and macOS. If the wheel does not install for the host, reasoning
-    # falls back to the HTTP backend or demo mode without crashing.
-    "llama-cpp-python>=0.2.90",
 ]
+
+[project.optional-dependencies]
+# Add real local-LLM support with:
+#   cd workers && uv add llama-cpp-python --package reasoning-worker
+# Then set ARIKIZU_REASONING_GGUF to point at a .gguf file on disk.
+# Making this optional avoids a long install on hosts without the
+# right compiler toolchain for the native extension.
+local = ["llama-cpp-python>=0.2.90"]
 
 [project.scripts]
 reasoning-worker = "reasoning_worker.__main__:main"

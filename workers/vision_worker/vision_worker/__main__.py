@@ -94,18 +94,47 @@ def main() -> None:
         return _HANDLE["handle"]
 
     @worker.handler("vision.detect")
-    def detect(image_path: str = "", confidence: float = 0.5) -> dict[str, Any]:
+    def detect(image_path: str = "", image_base64: str = "",
+               confidence: float = 0.5) -> dict[str, Any]:
         h = _h()
+        # When the browser sends a webcam frame, image_base64 is set.
+        # We decode its dimensions so canned boxes scale to the real
+        # frame, otherwise the UI draws boxes off-screen.
+        src_w, src_h = 640, 480
+        if image_base64:
+            try:
+                import base64, io
+                from PIL import Image
+                im = Image.open(io.BytesIO(base64.b64decode(image_base64)))
+                src_w, src_h = im.size
+            except Exception:
+                pass
+
         if h is None:
+            # Demo mode: canned detections, scaled to the actual frame.
+            def scale(b):
+                return [
+                    int(b[0] * src_w / 640),
+                    int(b[1] * src_h / 480),
+                    int(b[2] * src_w / 640),
+                    int(b[3] * src_h / 480),
+                ]
             return {
-                "image": image_path,
-                "detections": [],
-                "backend": "none",
-                "note": "no model loaded; see vision.switch_model",
+                "image": image_path or ("(webcam frame)" if image_base64 else "/demo/fixtures/scene.jpg"),
+                "width": src_w,
+                "height": src_h,
+                "backend": "demo-webcam" if image_base64 else "demo-fixture",
+                "note": "demo mode; no vision model loaded. Boxes are canned.",
+                "detections": [
+                    {"class": "box", "score": 0.94, "bbox": scale([90, 310, 190, 420])},
+                    {"class": "box", "score": 0.91, "bbox": scale([240, 320, 350, 430])},
+                    {"class": "box", "score": 0.88, "bbox": scale([400, 315, 510, 425])},
+                    {"class": "person", "score": 0.82, "bbox": scale([255, 165, 345, 310])},
+                ],
             }
-        # Weekend 5: SightRAG replaces this block with a real pipeline.
+        # Model is loaded. Weekend 5 wires in SightRAG preprocessing.
         return {
-            "image": image_path,
+            "image": image_path or "(webcam frame)",
             "detections": [],
             "backend": h.backend.value,
             "model_path": str(h.path),

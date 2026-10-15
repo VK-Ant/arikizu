@@ -26,7 +26,7 @@ Think a local LLM runtime, but for the full AI stack: vision, audio, documents,
 time series, reasoning, memory, policy enforcement, and human-in-the-loop
 feedback, all behind one capability API. One Rust supervisor spawns a set
 of Python workers that wrap VK's seven libraries (SightRAG, Sonarwise,
-DocQWise, WavqWise, adaptive-intelligence, LLMEvalKit, AntGuard).
+DocQWise, Vellex, WavqWise, adaptive-intelligence, LLMEvalKit, AntGuard).
 Everything is served from one binary on one device (Jetson Orin Nano,
 Raspberry Pi, or small x86_64 server) with a browser dashboard, an
 append-only audit log, and no cloud account required.
@@ -369,7 +369,7 @@ arikizu/
     test_worker/            reference worker, used by CI
     vision_worker/          wraps SightRAG + ONNX inference
     audio_worker/           wraps Sonarwise + VAD + ASR
-    docs_worker/            wraps DocQWise
+    docs_worker/            wraps DocQWise + Vellex
     reasoning_worker/       local LLM via a lightweight runtime / LAN gateway
     timeseries_worker/      wraps WavqWise + classical statistical models
     memory_worker/          wraps adaptive-intelligence
@@ -397,7 +397,7 @@ Ant Intelligence libraries.
 | ------------ | ---------------------------------------------------------- |
 | Weekend 5    | Full vision pipeline (SightRAG: segmentation, tracking)    |
 | Weekend 6    | Full audio pipeline (Sonarwise: speaker ID, embeddings)    |
-| Weekend 7    | Full document pipeline (DocQWise layout parsing)  |
+| Weekend 7    | Full document pipeline (DocQWise + Vellex layout parsing)  |
 | Weekend 8    | Long-range forecasting (WavqWise)                          |
 | Weekend 9    | Persistent memory (adaptive-intelligence)                  |
 | Weekend 10   | ML-based PII detectors (AntGuard)                          |

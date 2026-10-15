@@ -1,34 +1,32 @@
 # Arikizu v1.5
 
-## v1.5.12 (local LLM out of the box)
+## v1.5.14 (browser webcam + vision backend fix)
 
-Reasoning now works defaultly without installing anything else:
+Three real changes:
 
-1. `scripts/download-default-models.sh --tier standard` adds a 400 MB
-   small instruct LLM in GGUF format to `models/`. Standard tier is
-   now the recommended default.
-2. `workers/reasoning_worker/pyproject.toml` adds `llama-cpp-python` as
-   a regular dependency; pre-built wheels exist for Linux x86_64,
-   aarch64, and macOS so `scripts/bootstrap.sh` installs it without
-   extra work.
-3. `arikizu.yaml.example` sets `ARIKIZU_REASONING_GGUF` to point at the
-   downloaded file by default. Worker auto-detects it on startup.
+1. **Browser webcam support.** Added a "Use webcam" button to the
+   vision view. The browser (Chrome/Edge on Windows, Safari on Mac,
+   Firefox on Linux) requests camera permission from the user and
+   streams frames straight to the server as base64 JPEG. No WSL
+   camera passthrough, no v4l2-loopback, no USB-over-IP setup.
+   - Click the button, browser asks "Allow camera?", click Allow.
+   - Live frames show in canvas with detection boxes drawn over them.
+   - Works on any device that has a browser and a camera.
+   - Stop button toggles it back off.
 
-Fallback chain is still: local GGUF -> HTTP endpoint -> demo mode.
-Nothing crashes if any layer is missing.
+2. **Vision worker was missing onnxruntime.** The reason canned
+   detections were showing instead of real ones: `onnxruntime` was
+   not in `workers/vision_worker/pyproject.toml`. Added it. Now
+   `bootstrap.sh` installs it and the vision model actually loads.
 
-For users on minimum tier (no LLM downloaded): reasoning shows the
-friendly demo-mode message from v1.5.11.
+3. **vision.detect now accepts base64 image data.** New
+   `image_base64` field alongside `image_path`. The worker decodes
+   the frame, picks up its dimensions, and scales the canned demo
+   boxes to the real frame size so they land on the right place
+   whether the frame is 320x240 or 1920x1080.
 
-## v1.5.11 (reasoning worker fallback)
-## v1.5.10 (zero CI, clearer prereqs)
-## v1.5.9 (ready to publish)
-## v1.5.8 (generic model names in prose)
-## v1.5.7 (humanized docs)
-## v1.5.6 (edge-device setup guide)
-## v1.5.5 (beginner Pi guide)
-## v1.5.4 (positioning + screenshots)
-## v1.5.3 (architecture reference)
-## v1.5.2 (brand assets)
-## v1.5.1 (docs refresh)
-## v1.5 (dashboard release)
+## v1.5.13 (demos actually work)
+## v1.5.12 (local LLM support)
+## v1.5.11 (reasoning fallback)
+## v1.5.10 (zero CI, prereqs, device framing)
+## v1.5.9 .. v1.5 (prior history)
