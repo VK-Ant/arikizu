@@ -1,1 +1,1 @@
-"""Arikizu docs worker. Wraps DocQWise/Vellex for extract, table, search."""
+"""Arikizu docs worker. Wraps DocQWise for extract, table, search."""

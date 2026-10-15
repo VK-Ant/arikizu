@@ -2,7 +2,7 @@
 name = "eval-worker"
 version = "0.0.1"
 description = "Arikizu eval worker; wraps LLMEvalKit for score, compare, golden_run"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     # "llmevalkit>=0.1.0",

@@ -2,7 +2,7 @@
 name = "test-worker"
 version = "0.0.1"
 description = "Arikizu reference worker that proves the IPC path end to end"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
 ]

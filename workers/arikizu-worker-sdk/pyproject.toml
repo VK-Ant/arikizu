@@ -2,7 +2,7 @@
 name = "arikizu-worker-sdk"
 version = "0.0.1"
 description = "Thin IPC shim for Arikizu Python workers"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "msgpack>=1.0.7",
     "pydantic>=2.5.0",

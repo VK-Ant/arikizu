@@ -37,7 +37,8 @@
     <label>file path:</label>
     <input id="path" value="demo/fixtures/sample.txt" style="min-width:260px">
     <button id="extract">Extract</button>
-    <button id="search" style="background:var(--card);color:var(--fg);border:1px solid var(--border)">Search</button>
+    <label style="margin-left:12px">or upload:</label>
+    <input id="file" type="file" accept=".txt,.md,.log,.json,.csv" style="color:var(--muted);font-size:12px">
   </div>
   <div class="box">
     <h3>Schema (JSON)</h3>
@@ -71,17 +72,34 @@ async function call(cap, payload) {
   });
   return r.json();
 }
+async function readUpload() {
+  const fileEl = document.getElementById("file");
+  const f = fileEl && fileEl.files && fileEl.files[0];
+  if (!f) return null;
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res({name: f.name, text: r.result});
+    r.onerror = () => rej(r.error);
+    r.readAsText(f);
+  });
+}
 document.getElementById("extract").onclick = async () => {
   const path = document.getElementById("path").value;
   let schema = {};
   try { schema = JSON.parse(document.getElementById("schema").value); }
   catch(e) { alert("schema invalid: " + e.message); return; }
-  const b = await call("docs.extract", {file_path: path, schema});
+  const uploaded = await readUpload();
+  const payload = {file_path: path, schema};
+  if (uploaded) { payload.file_text = uploaded.text; payload.file_path = uploaded.name; }
+  const b = await call("docs.extract", payload);
   const stat = document.getElementById("status");
-  if (b.note && /placeholder/i.test(b.note)) {
+  const fieldsCount = Object.values(b.fields || {}).filter(v => v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)).length;
+  if (b.note) {
     stat.innerHTML = `<span class="tag wait">WAIT</span> ${b.note}`;
+  } else if (fieldsCount > 0) {
+    stat.innerHTML = `<span class="tag">PASS</span> extracted ${fieldsCount} field(s) from ${b.chars_scanned || 0} chars (${b.backend || "demo"})`;
   } else {
-    stat.innerHTML = `<span class="tag">PASS</span> extracted`;
+    stat.innerHTML = `<span class="tag wait">EMPTY</span> no fields matched; check schema or try the fixture</span>`;
   }
   const dl = document.getElementById("fields");
   dl.innerHTML = "";

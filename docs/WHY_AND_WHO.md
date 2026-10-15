@@ -1,7 +1,7 @@
 # Why Arikizu, Who uses it, Where it helps
 
 <p align="center">
-  <img src="assets/logo-400.png" alt="Arikizu" width="140">
+ <img src="assets/logo-400.png" alt="Arikizu" width="140">
 </p>
 
 Most AI software ships as a cloud API. That works for most people. But
@@ -19,21 +19,21 @@ So: why I built it, who the user is, where it actually helps today.
 Three things are all simultaneously true in late 2026:
 
 - **AI quality is good enough for real work.** the vision model can read a factory
-  line. the ASR model transcribes a nurse's handoff note. A small LLM can
-  summarize a shift report.
+ line. the ASR model transcribes a nurse's handoff note. A small LLM can
+ summarize a shift report.
 - **Compute is small enough for a Pi.** a compact vision model is 6 MB. a VAD model is
-  1.5 MB. A Jetson Orin Nano runs them with power to spare.
+ 1.5 MB. A Jetson Orin Nano runs them with power to spare.
 - **Nobody has packaged this for a non-engineer to install and run.**
-  Every piece exists as a Python package, a Docker image, or a cloud
-  service. The gap is the integration.
+ Every piece exists as a Python package, a Docker image, or a cloud
+ service. The gap is the integration.
 
 Three options exist today for the "I want AI on my shop floor" problem:
 
-| Option                                | Why it does not fit                                                     |
+| Option | Why it does not fit |
 | ------------------------------------- | ----------------------------------------------------------------------- |
 | Cloud API (OpenAI, Anthropic, Gemini) | Network, cost per call, data leaves the premises, offline is impossible |
-| Build it from scratch                 | Needs an ML engineer for 3 months; most teams don't have one             |
-| Buy a vertical appliance              | $20k+, locked to one vendor, one use-case                                |
+| Build it from scratch | Needs an ML engineer for 3 months; most teams don't have one |
+| Buy a vertical appliance | $20k+, locked to one vendor, one use-case |
 
 Arikizu is the fourth option: install one binary on a Pi, get vision,
 audio, documents, time series, reasoning, memory, guard and eval behind
@@ -59,11 +59,11 @@ the right unit of deployment.
 Edge is not a cost optimization. It is a trust and latency decision:
 
 - **Trust**: medical, legal, defense, religious and personal data
-  physically cannot leave the device without consent.
+ physically cannot leave the device without consent.
 - **Latency**: 50 ms detection cannot wait for a round trip to AWS.
 - **Resilience**: a factory line does not stop when the ISP does.
 - **Cost at scale**: 100 sites paying $0.001 per API call x 10 million
-  calls a month is not cheap, and the model gets slower not faster.
+ calls a month is not cheap, and the model gets slower not faster.
 
 ### 1.5 Why responsible-AI as a first-class citizen
 
@@ -129,7 +129,7 @@ Python glue for them. Neither works at the price his customers can pay.
 **What he needs from Arikizu:**
 
 - A `.deb` or flashable image that installs on a Pi or Jetson in 20
-  minutes.
+ minutes.
 - A `capabilities.toml` he can edit to add their custom detector.
 - A `policies/*.yaml` to add their safety rules.
 - A pipeline YAML that chains vision + guard + reasoning + approval.
@@ -157,7 +157,7 @@ time the plumbing works, the interesting part is a weekend away.
 **What we need from Arikizu:**
 
 - A Python worker SDK that handles the boring parts (IPC, framing,
-  backend selection, graceful shutdown) in one import.
+ backend selection, graceful shutdown) in one import.
 - A capability registry that is just TOML.
 - An HTTP surface we don't have to write.
 - A dashboard we can extend by dropping an HTML file in `demo/web/`.
@@ -181,7 +181,7 @@ gate for scrap decisions.
 - **Textile dyeing:** color drift detection, reject-or-continue approval.
 - **Pharma packaging:** blister-pack fill-level check, batch tracking.
 - **Electronics assembly:** PCB defect detection with the operator
-  confirming each flag.
+ confirming each flag.
 
 Why Arikizu: no vendor cloud sees the production data. Audit log
 satisfies ISO 9001.
@@ -192,12 +192,12 @@ satisfies ISO 9001.
 guard policy.
 
 - **Nurse handoff notes:** record, transcribe, summarize, redact PHI,
-  save to the patient record. Audit who heard what.
+ save to the patient record. Audit who heard what.
 - **Rural clinic triage:** patient speaks symptoms in Tamil; local
-  the ASR model transcribes; small LLM asks three follow-up questions;
-  doctor sees the structured intake form.
+ the ASR model transcribes; small LLM asks three follow-up questions;
+ doctor sees the structured intake form.
 - **Mental-health intake:** audio stays on-device, only the structured
-  summary leaves (and only if the patient approves it).
+ summary leaves (and only if the patient approves it).
 
 Why Arikizu: HIPAA / Indian DPDP compliance by construction. The data
 cannot leak because it never left.
@@ -207,11 +207,11 @@ cannot leak because it never left.
 **Pattern:** docs worker + reasoning + memory, no network.
 
 - **Engine room manuals:** 2000-page OEM PDFs, extract the right
-  procedure for the fault code the engineer just typed.
+ procedure for the fault code the engineer just typed.
 - **Watch log summarization:** 12-hour watch notes to a 1-paragraph
-  handoff.
+ handoff.
 - **Compliance:** every answer the AI gives is in the audit log, with
-  the source paragraph.
+ the source paragraph.
 
 Why Arikizu: a ship at sea has no reliable internet. Everything must
 work offline.
@@ -221,10 +221,10 @@ work offline.
 **Pattern:** vision + docs + memory.
 
 - **Temple scanning:** vision worker detects iconography; memory recalls
-  past scans of the same deity across temples; docs worker extracts
-  from epigraphy transcripts.
+ past scans of the same deity across temples; docs worker extracts
+ from epigraphy transcripts.
 - **Museum cataloguing:** camera on a cart, moves through the stacks,
-  Arikizu classifies and matches each object against the catalogue.
+ Arikizu classifies and matches each object against the catalogue.
 
 Why Arikizu: cultural data stays in the country / institution. No
 training labels leak to a US cloud.
@@ -234,9 +234,9 @@ training labels leak to a US cloud.
 **Pattern:** vision + timeseries + guard + alerts.
 
 - **Greenhouse pest detection:** camera + vision worker; alerts when a
-  pest class exceeds threshold.
+ pest class exceeds threshold.
 - **Soil moisture time series:** forecast watering need; anomaly
-  detection on sensor drift.
+ detection on sensor drift.
 
 Why Arikizu: the farm has no reliable network. The Pi runs standalone
 and syncs when WiFi is in range.
@@ -258,14 +258,14 @@ model is SHA-256 verified, every action is in the audit log.
 I want to be honest about the non-fit list, because overclaiming kills
 trust.
 
-| Not a fit                                                    | Use instead                               |
+| Not a fit | Use instead |
 | ------------------------------------------------------------ | ----------------------------------------- |
-| High-throughput cloud workload (1000 req/s)                  | Managed inference (Bedrock, Vertex, etc.) |
-| Training large models                                        | A real GPU cluster                        |
-| Multi-tenant SaaS                                            | Not what Arikizu is for                   |
-| Real-time video >30 FPS at full resolution on a Pi           | A dedicated video analytics appliance     |
-| Models that need >8 GB VRAM                                  | Workstation or server GPU                 |
-| A team of 10 engineers who already have their own ML platform | They don't need Arikizu                   |
+| High-throughput cloud workload (1000 req/s) | Managed inference (Bedrock, Vertex, etc.) |
+| Training large models | A real GPU cluster |
+| Multi-tenant SaaS | Not what Arikizu is for |
+| Real-time video >30 FPS at full resolution on a Pi | A dedicated video analytics appliance |
+| Models that need >8 GB VRAM | Workstation or server GPU |
+| A team of 10 engineers who already have their own ML platform | They don't need Arikizu |
 
 See [`SPEC.md`](SPEC.md) for the full non-fit list and the five-point
 qualification checklist.
@@ -274,16 +274,16 @@ qualification checklist.
 
 ## 5. Comparison with the obvious alternatives
 
-| Dimension        | Cloud API (OpenAI/Anthropic/GCP) | Siemens Industrial Edge | Nvidia Jetson+Metropolis | **Arikizu**                   |
+| Dimension | Cloud API (OpenAI/Anthropic/GCP) | Siemens Industrial Edge | Nvidia Jetson+Metropolis | **Arikizu** |
 | ---------------- | -------------------------------- | ----------------------- | ------------------------ | ----------------------------- |
-| Offline          | No                               | Partial                 | Yes                      | **Yes (default)**             |
-| Install time     | Minutes (an API key)             | Days                    | Days                     | **~30 min on a Pi**           |
-| Data residency   | Vendor's region                  | Local                   | Local                    | **On the device**             |
-| Cost at 1 device | $0 + per-call fee                | $8-20k                  | $500-$2k + licenses      | **$75 Pi + $0**               |
-| Custom worker    | API wrapper                      | Vendor SDK              | Vendor SDK               | **~30 lines of Python**       |
-| Audit log        | Vendor-provided (opt-in)         | Varies                  | Varies                   | **SQLite, every call, local** |
-| Human-in-the-loop | Not standard                     | Varies                  | Not standard             | **Approval gate per stage**   |
-| License          | Proprietary                      | Proprietary             | Proprietary              | **Will be OSS (W20)**         |
+| Offline | No | Partial | Yes | **Yes (default)** |
+| Install time | Minutes (an API key) | Days | Days | **~30 min on a Pi** |
+| Data residency | Vendor's region | Local | Local | **On the device** |
+| Cost at 1 device | $0 + per-call fee | $8-20k | $500-$2k + licenses | **$75 Pi + $0** |
+| Custom worker | API wrapper | Vendor SDK | Vendor SDK | **~30 lines of Python** |
+| Audit log | Vendor-provided (opt-in) | Varies | Varies | **SQLite, every call, local** |
+| Human-in-the-loop | Not standard | Varies | Not standard | **Approval gate per stage** |
+| License | Proprietary | Proprietary | Proprietary | **Will be OSS (W20)** |
 
 Arikizu is the only option in that table that is simultaneously
 offline, cheap, extendable, auditable, and open.
@@ -311,20 +311,20 @@ Honest about what works right now, so you can decide if it fits.
 
 **Scaffolded, placeholder behind the API (will light up on the listed weekend):**
 
-| Worker        | What's a stub today                                    | When it lights up |
+| Worker | What's a stub today | When it lights up |
 | ------------- | ------------------------------------------------------ | ----------------- |
 | vision (segment, track) | detect is real; segment and track return placeholder | Weekend 5 (SightRAG) |
-| audio (speaker ID)      | VAD and transcribe real; speaker ID is placeholder | Weekend 6 (Sonarwise) |
-| docs                    | DocQWise wrap when installed; otherwise placeholder | Weekend 7 (DocQWise + Vellex) |
+| audio (speaker ID) | VAD and transcribe real; speaker ID is placeholder | Weekend 6 (Sonarwise) |
+| docs | DocQWise wrap when installed; otherwise placeholder | Weekend 7 (DocQWise) |
 | timeseries (long-range) | short forecasts real; long-range placeholder | Weekend 8 (WavqWise full) |
-| memory                  | works in RAM; persistence placeholder | Weekend 9 (adaptive-intelligence) |
-| guard                   | regex detectors real; ML-based detectors placeholder | Weekend 10 (AntGuard full) |
-| eval                    | exact / jaccard real; LLM-judge placeholder | Weekend 12 (LLMEvalKit full) |
+| memory | works in RAM; persistence placeholder | Weekend 9 (adaptive-intelligence) |
+| guard | regex detectors real; ML-based detectors placeholder | Weekend 10 (AntGuard full) |
+| eval | exact / jaccard real; LLM-judge placeholder | Weekend 12 (LLMEvalKit full) |
 
 **Not yet (deliberate):**
 
 - Not external document AIs. Not Google Document AI. Not a cloud document AI. The
-  docs worker is backed by my own DocQWise library.
+ docs worker is backed by my own DocQWise library.
 - Not multi-tenant.
 - Not multi-node.
 - Not training.
@@ -340,13 +340,13 @@ its own real-vs-placeholder status.
 Should you try Arikizu? Short answer in three bullets.
 
 - **Yes if:** you have one or more devices doing one specific job, want
-  AI help on that job, cannot or do not want to send data to a cloud,
-  and are willing to run a Pi or Jetson.
+ AI help on that job, cannot or do not want to send data to a cloud,
+ and are willing to run a Pi or Jetson.
 - **Maybe if:** you have a cloud-first stack and want on-prem as a
-  compliance option. Arikizu works but your team may prefer the
-  familiar cloud API.
+ compliance option. Arikizu works but your team may prefer the
+ familiar cloud API.
 - **No if:** your workload is pure cloud scale, you need multi-tenant,
-  or you need training.
+ or you need training.
 
 For "yes" and "maybe" people: 5-minute laptop quickstart is in the
 [README](../README.md). Full Pi walkthrough is in

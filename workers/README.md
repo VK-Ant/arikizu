@@ -4,24 +4,24 @@ Every worker is a tiny package. It imports the SDK, registers handlers, and call
 
 ```
 workers/
-├── pyproject.toml                 uv workspace, lists every member
-├── arikizu-worker-sdk/            the shared IPC shim; every worker imports this
-├── test_worker/                   reference worker; test.echo, test.add, test.slow
-├── vision_worker/                 SightRAG; vision.detect, vision.ocr, vision.caption
-├── audio_worker/                  Sonarwise; audio.transcribe, audio.vad, audio.keyword_spot
-├── docs_worker/                   DocQWise/Vellex; docs.extract, docs.table, docs.search
-├── reasoning_worker/              Ollama HTTP; reasoning.answer, summarize, complete
-├── timeseries_worker/             WavqWise; timeseries.forecast, detect_anomaly
-├── memory_worker/                 adaptive-intelligence; memory.recall, update, reward
-├── guard_worker/                  AntGuard; guard.scan, redact, audit
-└── eval_worker/                   LLMEvalKit; eval.score, compare, golden_run
+├── pyproject.toml uv workspace, lists every member
+├── arikizu-worker-sdk/ the shared IPC shim; every worker imports this
+├── test_worker/ reference worker; test.echo, test.add, test.slow
+├── vision_worker/ SightRAG; vision.detect, vision.ocr, vision.caption
+├── audio_worker/ Sonarwise; audio.transcribe, audio.vad, audio.keyword_spot
+├── docs_worker/ DocQWise; docs.extract, docs.table, docs.search
+├── reasoning_worker/ Ollama HTTP; reasoning.answer, summarize, complete
+├── timeseries_worker/ WavqWise; timeseries.forecast, detect_anomaly
+├── memory_worker/ adaptive-intelligence; memory.recall, update, reward
+├── guard_worker/ AntGuard; guard.scan, redact, audit
+└── eval_worker/ LLMEvalKit; eval.score, compare, golden_run
 ```
 
 ## Setup
 
 ```
 cd workers
-uv sync          # creates .venv/, resolves every member together
+uv sync # creates .venv/, resolves every member together
 ```
 
 ## Running one worker standalone (debugging)
@@ -65,8 +65,8 @@ detector = Detector.load("yolov8n-defect.onnx")
 
 @worker.handler("vision.detect")
 def detect(image_path: str = "", confidence: float = 0.5) -> dict:
-    detections = detector(image_path, conf=confidence)
-    return {"image": image_path, "detections": [d.to_dict() for d in detections]}
+ detections = detector(image_path, conf=confidence)
+ return {"image": image_path, "detections": [d.to_dict() for d in detections]}
 ```
 
 The frame format and heartbeat loop stay in the SDK; the worker just supplies the handlers.

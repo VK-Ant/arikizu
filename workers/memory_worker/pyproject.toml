@@ -2,7 +2,7 @@
 name = "memory-worker"
 version = "0.0.1"
 description = "Arikizu memory worker; wraps adaptive-intelligence for recall, update, reward"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     # "adaptive-intelligence>=4.0.8",

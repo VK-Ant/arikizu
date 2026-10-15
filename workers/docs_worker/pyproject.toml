@@ -1,13 +1,12 @@
 [project]
 name = "docs-worker"
 version = "0.0.1"
-description = "Arikizu docs worker; wraps DocQWise/Vellex for extract, table, search"
-requires-python = ">=3.11"
+description = "Arikizu docs worker; wraps DocQWise for extract, table, search"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "arikizu-worker-sdk",
-    # "docqwise>=0.1.0",
-    # "vellex>=0.1.0",
-]
+ "arikizu-worker-sdk",
+ # "docqwise>=0.1.0",
+ ]
 
 [project.scripts]
 docs-worker = "docs_worker.__main__:main"

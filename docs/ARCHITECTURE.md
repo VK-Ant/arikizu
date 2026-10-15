@@ -1,7 +1,7 @@
 # Arikizu Architecture
 
 <p align="center">
-  <img src="assets/architecture.png" alt="Arikizu architecture" width="900">
+ <img src="assets/architecture.png" alt="Arikizu architecture" width="900">
 </p>
 
 One Rust binary that supervises ten Python workers. One HTTP surface
@@ -20,12 +20,12 @@ see [`HOW_IT_RUNS.md`](HOW_IT_RUNS.md).
 The system splits cleanly into four zones. Each zone has one job and a
 single, deliberate boundary with the next.
 
-| Zone              | What it does                                          | Tech                          |
+| Zone | What it does | Tech |
 | ----------------- | ----------------------------------------------------- | ----------------------------- |
-| **Interaction**   | How humans and apps talk to Arikizu                   | HTTP, WebSocket, CLI, browser |
-| **Runtime**       | Supervision, routing, policy, device detection        | Rust (9 crates)               |
-| **Intelligence** | The actual AI work                                    | Python (10 workers, uv)       |
-| **Trust**         | Everything we promise to remember or enforce          | SQLite, YAML, filesystem      |
+| **Interaction** | How humans and apps talk to Arikizu | HTTP, WebSocket, CLI, browser |
+| **Runtime** | Supervision, routing, policy, device detection | Rust (9 crates) |
+| **Intelligence** | The actual AI work | Python (10 workers, uv) |
+| **Trust** | Everything we promise to remember or enforce | SQLite, YAML, filesystem |
 
 Picture at the top of this file shows the same split visually.
 
@@ -40,11 +40,11 @@ Four entry points. All of them land on the same `/api/v1/*` surface.
 Served from `ui/static/index.html` by `ant-http`'s fallback service.
 Zero build step, no npm. Pulls live data from three endpoints:
 
-| Endpoint                                | What it shows on the dashboard             |
+| Endpoint | What it shows on the dashboard |
 | --------------------------------------- | ------------------------------------------ |
-| `GET /api/v1/status`                    | Device chip, worker count, uptime          |
-| `GET /api/v1/audit?limit=5`             | Recent activity feed                       |
-| `GET /api/v1/capabilities`              | How many capabilities exist                |
+| `GET /api/v1/status` | Device chip, worker count, uptime |
+| `GET /api/v1/audit?limit=5` | Recent activity feed |
+| `GET /api/v1/capabilities` | How many capabilities exist |
 
 Mobile responsive. Sidebar collapses under 700 px.
 
@@ -80,15 +80,15 @@ thing.
 
 ```
 crates/
-  ant-common/      core types, errors, result type
-  ant-ipc/         length-prefixed MessagePack over Unix socket
-  ant-router/      capabilities.toml loader, lookup by name
-  ant-supervisor/  worker lifecycle: spawn, call, shutdown, restart
-  ant-models/      model manifest, SHA-256 verification, backend pick
-  ant-devices/     CPU / GPU / Jetson detection
-  ant-feedback/    rate, correct, approve, reject, annotate
-  ant-http/        axum REST + WebSocket + static file serving
-  ant-cli/         the `arikizu` binary
+ ant-common/ core types, errors, result type
+ ant-ipc/ length-prefixed MessagePack over Unix socket
+ ant-router/ capabilities.toml loader, lookup by name
+ ant-supervisor/ worker lifecycle: spawn, call, shutdown, restart
+ ant-models/ model manifest, SHA-256 verification, backend pick
+ ant-devices/ CPU / GPU / Jetson detection
+ ant-feedback/ rate, correct, approve, reject, annotate
+ ant-http/ axum REST + WebSocket + static file serving
+ ant-cli/ the `arikizu` binary
 ```
 
 ### 3.1 ant-common (foundation)
@@ -114,10 +114,10 @@ Loads `capabilities.toml` at boot. Every capability declares:
 
 ```toml
 [vision_detect]
-name       = "vision.detect"
-worker     = "vision"
+name = "vision.detect"
+worker = "vision"
 timeout_ms = 5000
-priority   = 10
+priority = 10
 ```
 
 The router is a `HashMap<String, CapabilitySpec>` with a few helpers
@@ -143,13 +143,13 @@ Reads `models.toml` manifest, verifies SHA-256 of each file on disk,
 picks a backend per device. The decision table lives in
 `backend_selection.rs`:
 
-| Platform               | Backend chain                           |
+| Platform | Backend chain |
 | ---------------------- | --------------------------------------- |
-| Jetson (any Orin)      | TensorRT -> onnxruntime-gpu -> CPU      |
-| Linux x86_64 + NVIDIA  | onnxruntime-gpu (CUDA) -> CPU           |
-| Mac (Apple Silicon)    | onnxruntime (CoreML EP) -> CPU          |
-| Pi 4 / 5               | onnxruntime (CPU)                       |
-| Everything else        | onnxruntime (CPU)                       |
+| Jetson (any Orin) | TensorRT -> onnxruntime-gpu -> CPU |
+| Linux x86_64 + NVIDIA | onnxruntime-gpu (CUDA) -> CPU |
+| Mac (Apple Silicon) | onnxruntime (CoreML EP) -> CPU |
+| Pi 4 / 5 | onnxruntime (CPU) |
+| Everything else | onnxruntime (CPU) |
 
 Each worker's `.backends` capability lets the dashboard see what was
 picked for that worker.
@@ -165,12 +165,12 @@ gpus, total_memory_mb }`. The dashboard chip ("Raspberry Pi", "Jetson",
 
 Four tables in SQLite:
 
-| Table           | Rows written when                                    |
+| Table | Rows written when |
 | --------------- | ---------------------------------------------------- |
-| `ratings`       | `/feedback/rate` is called                           |
-| `corrections`   | `/feedback/correct` is called                        |
-| `approvals`     | A pipeline stage hits a `feedback.approve` gate      |
-| `annotations`   | `/feedback/annotate` is called                       |
+| `ratings` | `/feedback/rate` is called |
+| `corrections` | `/feedback/correct` is called |
+| `approvals` | A pipeline stage hits a `feedback.approve` gate |
+| `annotations` | `/feedback/annotate` is called |
 
 The pending-approvals queue is an in-memory `HashMap<Uuid, PendingApproval>`
 backed by `approvals` on restart. Dashboard reads it via
@@ -181,21 +181,21 @@ backed by `approvals` on restart. Dashboard reads it via
 An `axum` router with 14 routes, grouped:
 
 ```
-GET  /                              operator dashboard (fallback_service)
-GET  /demo/*                        developer sandbox  (nest_service)
-GET  /health                        liveness probe
-GET  /api/v1/status                 runtime summary
-GET  /api/v1/devices                hardware inventory
-GET  /api/v1/capabilities           capability list
-GET  /api/v1/workers                worker list
-POST /api/v1/call/:domain/:op       the only API that matters
-GET  /api/v1/audit                  tail of audit log
-GET  /api/v1/events                 WebSocket event feed
-POST /api/v1/feedback/*             5 feedback endpoints
-GET  /api/v1/pipeline/config        pipeline YAML
-POST /api/v1/pipeline/run           kick off a pipeline run
-GET  /api/v1/runtime                aggregated per-worker runtime info
-POST /api/v1/stop                   graceful shutdown
+GET / operator dashboard (fallback_service)
+GET /demo/* developer sandbox (nest_service)
+GET /health liveness probe
+GET /api/v1/status runtime summary
+GET /api/v1/devices hardware inventory
+GET /api/v1/capabilities capability list
+GET /api/v1/workers worker list
+POST /api/v1/call/:domain/:op the only API that matters
+GET /api/v1/audit tail of audit log
+GET /api/v1/events WebSocket event feed
+POST /api/v1/feedback/* 5 feedback endpoints
+GET /api/v1/pipeline/config pipeline YAML
+POST /api/v1/pipeline/run kick off a pipeline run
+GET /api/v1/runtime aggregated per-worker runtime info
+POST /api/v1/stop graceful shutdown
 ```
 
 All JSON. All synchronous except `/events`. All documented in
@@ -206,12 +206,12 @@ All JSON. All synchronous except `/events`. All documented in
 `clap`-driven CLI. Subcommands:
 
 ```
-arikizu run              launch supervisor + HTTP server (what systemd runs)
-arikizu call <cap>       POST /api/v1/call via reqwest
-arikizu status           GET /api/v1/status, pretty-print
-arikizu stop             POST /api/v1/stop
-arikizu check            runtime health probe
-arikizu models list      list models known from models.toml
+arikizu run launch supervisor + HTTP server (what systemd runs)
+arikizu call <cap> POST /api/v1/call via reqwest
+arikizu status GET /api/v1/status, pretty-print
+arikizu stop POST /api/v1/stop
+arikizu check runtime health probe
+arikizu models list list models known from models.toml
 ```
 
 Everything the CLI does is a thin HTTP client over `127.0.0.1:7000`.
@@ -233,10 +233,10 @@ Body is a MessagePack map. Request:
 
 ```
 {
-  "id":       <uuid v4>,
-  "capability": "vision.detect",
-  "payload":   { ... any JSON ... },
-  "deadline_ms": 5000
+ "id": <uuid v4>,
+ "capability": "vision.detect",
+ "payload": { ... any JSON ... },
+ "deadline_ms": 5000
 }
 ```
 
@@ -244,10 +244,10 @@ Response:
 
 ```
 {
-  "id":    <same uuid>,
-  "ok":    true|false,
-  "result": { ... } | null,
-  "error":  "..." | null
+ "id": <same uuid>,
+ "ok": true|false,
+ "result": { ... } | null,
+ "error": "..." | null
 }
 ```
 
@@ -280,18 +280,18 @@ Writing a new worker is: install the SDK, decorate functions, run.
 
 Ten workers, each in its own uv package under `workers/`.
 
-| Worker       | Wraps                           | Capabilities                                                      |
+| Worker | Wraps | Capabilities |
 | ------------ | ------------------------------- | ----------------------------------------------------------------- |
-| `test`       | nothing (reference impl)        | `test.echo`, `test.sleep`, `test.fail`                            |
-| `vision`     | SightRAG + a compact vision model              | `vision.detect`, `vision.segment`, `vision.track`, `vision.backends` |
-| `audio`      | Sonarwise + a VAD model + the ASR model | `audio.vad`, `audio.transcribe`, `audio.backends`                  |
-| `docs`       | DocQWise + Vellex               | `docs.extract`, `docs.search`                                     |
-| `reasoning`  | a local LLM endpoint              | `reasoning.answer`, `reasoning.summarize`, `reasoning.complete`   |
-| `timeseries` | WavqWise + classical ML libraries + scipy      | `timeseries.forecast`, `timeseries.anomaly`                       |
-| `memory`     | adaptive-intelligence           | `memory.update`, `memory.recall`, `memory.reward`                 |
-| `guard`      | AntGuard (regex v0.1)           | `guard.scan`, `guard.redact`                                      |
-| `eval`       | LLMEvalKit                      | `eval.score`, `eval.golden_run`                                   |
-| `feedback`   | n/a (handled by ant-feedback)   | (Rust-side only)                                                  |
+| `test` | nothing (reference impl) | `test.echo`, `test.sleep`, `test.fail` |
+| `vision` | SightRAG + a compact vision model | `vision.detect`, `vision.segment`, `vision.track`, `vision.backends` |
+| `audio` | Sonarwise + a VAD model + the ASR model | `audio.vad`, `audio.transcribe`, `audio.backends` |
+| `docs` | DocQWise | `docs.extract`, `docs.search` |
+| `reasoning` | a local LLM endpoint | `reasoning.answer`, `reasoning.summarize`, `reasoning.complete` |
+| `timeseries` | WavqWise + classical ML libraries + scipy | `timeseries.forecast`, `timeseries.anomaly` |
+| `memory` | adaptive-intelligence | `memory.update`, `memory.recall`, `memory.reward` |
+| `guard` | AntGuard (regex v0.1) | `guard.scan`, `guard.redact` |
+| `eval` | LLMEvalKit | `eval.score`, `eval.golden_run` |
+| `feedback` | n/a (handled by ant-feedback) | (Rust-side only) |
 
 Each worker:
 
@@ -315,12 +315,12 @@ One table:
 
 ```sql
 CREATE TABLE events (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts         INTEGER NOT NULL,            -- epoch ms
-    kind       TEXT    NOT NULL,            -- e.g. "vision.detect"
-    actor      TEXT,                        -- user, system, worker name
-    ref        TEXT,                        -- correlation id
-    body       TEXT    NOT NULL             -- JSON payload
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ ts INTEGER NOT NULL, -- epoch ms
+ kind TEXT NOT NULL, -- e.g. "vision.detect"
+ actor TEXT, -- user, system, worker name
+ ref TEXT, -- correlation id
+ body TEXT NOT NULL -- JSON payload
 );
 CREATE INDEX idx_events_ts ON events(ts DESC);
 CREATE INDEX idx_events_kind ON events(kind);
@@ -345,7 +345,7 @@ Declarative rules the supervisor consults before dispatch:
 # policies/pii-redact.yaml
 name: pii-redact
 when:
-  capability_prefix: ["docs.", "reasoning.", "audio."]
+ capability_prefix: ["docs.", "reasoning.", "audio."]
 action: redact
 detectors: [email, phone, ssn]
 ```
@@ -371,49 +371,49 @@ numbers from these drive the regression protection on new builds.
 What happens when a browser calls `POST /api/v1/call/vision/detect`:
 
 ```
-Browser                                                          Workers (Python)
-   |                                                                    ^
-   | 1. HTTP POST                                                       |
-   v                                                                    |
-+----------------+ 2. route match                                       |
-|  ant-http      | --------------------------------+                    |
-| (axum)         |                                 |                    |
-+----------------+                                 v                    |
-                                       +---------------------+          |
-                                       | ant-router.get()    |          |
-                                       |   -> CapabilitySpec |          |
-                                       +----------+----------+          |
-                                                  |                     |
-                                                  v                     |
-                                       +---------------------+          |
-                                       | policies.evaluate() |          |
-                                       |   (allow/redact/..)|          |
-                                       +----------+----------+          |
-                                                  |                     |
-                                                  v                     |
-                                       +---------------------+          |
-                                       | ant-supervisor      |          |
-                                       |   .worker(name)     |          |
-                                       |   .call(cap,...)    |          |
-                                       +----------+----------+          |
-                                                  |                     |
-                                                  v                     |
-                                       +---------------------+          |
-                                       | ant-ipc             |---------->
-                                       |   write frame       |   (socket)
-                                       |   await frame       | <---------
-                                       +----------+----------+          |
-                                                  |                     |
-                                                  v                     |
-                                       +---------------------+          |
-                                       | audit.append()      |          |
-                                       | bus.publish(Event)  |          |
-                                       +----------+----------+          |
-   ^                                              |                     |
-   | 3. HTTP 200 + JSON                           |                     |
-   +----------------------------------------------+                     |
-                                                                        |
-   WebSocket subscribers (dashboard event feed) also receive the Event.
+Browser Workers (Python)
+ | ^
+ | 1. HTTP POST |
+ v |
++----------------+ 2. route match |
+| ant-http | --------------------------------+ |
+| (axum) | | |
++----------------+ v |
+ +---------------------+ |
+ | ant-router.get() | |
+ | -> CapabilitySpec | |
+ +----------+----------+ |
+ | |
+ v |
+ +---------------------+ |
+ | policies.evaluate() | |
+ | (allow/redact/..)| |
+ +----------+----------+ |
+ | |
+ v |
+ +---------------------+ |
+ | ant-supervisor | |
+ | .worker(name) | |
+ | .call(cap,...) | |
+ +----------+----------+ |
+ | |
+ v |
+ +---------------------+ |
+ | ant-ipc |---------->
+ | write frame | (socket)
+ | await frame | <---------
+ +----------+----------+ |
+ | |
+ v |
+ +---------------------+ |
+ | audit.append() | |
+ | bus.publish(Event) | |
+ +----------+----------+ |
+ ^ | |
+ | 3. HTTP 200 + JSON | |
+ +----------------------------------------------+ |
+ |
+ WebSocket subscribers (dashboard event feed) also receive the Event.
 ```
 
 Stages:
@@ -437,21 +437,21 @@ A pipeline is an ordered list of stages in `arikizu.yaml`:
 
 ```yaml
 pipeline:
-  - stage: ingest
-    capability: audio.transcribe
-    input: { file: "{{ input.file }}" }
+ - stage: ingest
+ capability: audio.transcribe
+ input: { file: "{{ input.file }}" }
 
-  - stage: redact
-    capability: guard.redact
-    input: { text: "{{ previous.transcript }}" }
+ - stage: redact
+ capability: guard.redact
+ input: { text: "{{ previous.transcript }}" }
 
-  - stage: human-review
-    require_approval: true
-    reviewer_role: operator
+ - stage: human-review
+ require_approval: true
+ reviewer_role: operator
 
-  - stage: summarize
-    capability: reasoning.summarize
-    input: { text: "{{ redact.text }}" }
+ - stage: summarize
+ capability: reasoning.summarize
+ input: { text: "{{ redact.text }}" }
 ```
 
 The pipeline executor:
@@ -459,11 +459,11 @@ The pipeline executor:
 1. Walks stages in order.
 2. Resolves `{{ ... }}` references against previous stage outputs.
 3. On `require_approval: true`, enqueues an approval and blocks the
-   stage until the dashboard says approve or reject.
+ stage until the dashboard says approve or reject.
 4. On any stage failure, writes a `pipeline.failed` audit row and
-   stops (no partial writes).
+ stops (no partial writes).
 5. On success, writes a `pipeline.completed` audit row with the full
-   per-stage trace.
+ per-stage trace.
 
 A pipeline is a first-class citizen of the audit log; you can replay
 any past run from the recorded trace.
@@ -475,29 +475,29 @@ any past run from the recorded trace.
 When `arikizu run` starts (either from the shell or from systemd):
 
 ```
-t=0.00  parse CLI flags, load arikizu.yaml
-t=0.01  ant-common::config::load_or_default()
-t=0.02  ant-router::CapabilityRegistry::load("capabilities.toml")
-t=0.03  ant-feedback::AuditLog::open("data/audit.sqlite") -> migrations
-t=0.04  ant-feedback::FeedbackManager::new(audit)
-t=0.05  ant-devices::DeviceInventory::detect()
-t=0.06  ant-models::ModelRegistry::load_manifest() -> SHA verify
-t=0.10  Supervisor::spawn_all()  -> N Python subprocesses, N Unix sockets
-         - test:        50 ms to answer
-         - vision:    2-5 s (loads the vision model to memory)
-         - audio:     1-3 s (loads VAD)
-         - docs:      <1 s
-         - timeseries: <1 s
-         - memory:    <100 ms
-         - guard:     <100 ms
-         - eval:      <100 ms
-         - reasoning: 0 ms (no model load until first call)
-t=5-10  all workers ACK'd ready
-t=5.10  ant-http::serve(0.0.0.0:7000)
-         - log "serving demo sandbox at /demo"
-         - log "serving operator dashboard at /"
-         - log "HTTP server listening"
-t=5.11  ready to serve requests
+t=0.00 parse CLI flags, load arikizu.yaml
+t=0.01 ant-common::config::load_or_default()
+t=0.02 ant-router::CapabilityRegistry::load("capabilities.toml")
+t=0.03 ant-feedback::AuditLog::open("data/audit.sqlite") -> migrations
+t=0.04 ant-feedback::FeedbackManager::new(audit)
+t=0.05 ant-devices::DeviceInventory::detect()
+t=0.06 ant-models::ModelRegistry::load_manifest() -> SHA verify
+t=0.10 Supervisor::spawn_all() -> N Python subprocesses, N Unix sockets
+ - test: 50 ms to answer
+ - vision: 2-5 s (loads the vision model to memory)
+ - audio: 1-3 s (loads VAD)
+ - docs: <1 s
+ - timeseries: <1 s
+ - memory: <100 ms
+ - guard: <100 ms
+ - eval: <100 ms
+ - reasoning: 0 ms (no model load until first call)
+t=5-10 all workers ACK'd ready
+t=5.10 ant-http::serve(0.0.0.0:7000)
+ - log "serving demo sandbox at /demo"
+ - log "serving operator dashboard at /"
+ - log "HTTP server listening"
+t=5.11 ready to serve requests
 ```
 
 On a Pi 4 the cold start is ~15 s. On a laptop ~5 s.
@@ -509,30 +509,30 @@ On a Pi 4 the cold start is ~15 s. On a laptop ~5 s.
 Three distribution tiers, same binary, different packaging.
 
 ```
-                     +---------------------------+
-                     |  Flashable image (Tier 3) |
-                     |  pi-gen -> .img.xz        |
-                     +------------+--------------+
-                                  |
-                                  v
-    +--------------------------------------------------------+
-    |  apt package (Tier 2) -- .deb -- systemd unit          |
-    |  user: arikizu                                         |
-    |  WorkingDirectory: /var/lib/arikizu                    |
-    |  ExecStart: /usr/bin/arikizu run                       |
-    |  Sandbox: NoNewPrivileges, ProtectSystem=strict        |
-    +--------------------------------------------------------+
-                                  |
-                                  v
-    +--------------------------------------------------------+
-    |  Dev binary (Tier 1) -- ~/.arikizu/bin/arikizu         |
-    |  no service, no root                                   |
-    +--------------------------------------------------------+
-                                  |
-                                  v
-    +--------------------------------------------------------+
-    |  Build from source -- cargo + uv + make                |
-    +--------------------------------------------------------+
+ +---------------------------+
+ | Flashable image (Tier 3) |
+ | pi-gen -> .img.xz |
+ +------------+--------------+
+ |
+ v
+ +--------------------------------------------------------+
+ | apt package (Tier 2) -- .deb -- systemd unit |
+ | user: arikizu |
+ | WorkingDirectory: /var/lib/arikizu |
+ | ExecStart: /usr/bin/arikizu run |
+ | Sandbox: NoNewPrivileges, ProtectSystem=strict |
+ +--------------------------------------------------------+
+ |
+ v
+ +--------------------------------------------------------+
+ | Dev binary (Tier 1) -- ~/.arikizu/bin/arikizu |
+ | no service, no root |
+ +--------------------------------------------------------+
+ |
+ v
+ +--------------------------------------------------------+
+ | Build from source -- cargo + uv + make |
+ +--------------------------------------------------------+
 ```
 
 Full tier description: [`DISTRIBUTION.md`](DISTRIBUTION.md).
@@ -544,12 +544,12 @@ Full tier description: [`DISTRIBUTION.md`](DISTRIBUTION.md).
 Arikizu is deliberately single-device. Why not multi-node:
 
 - The target customer is a factory, nurse's station, ship engine room,
-  temple conservator. They do not have a Kubernetes cluster.
+ temple conservator. They do not have a Kubernetes cluster.
 - Edge latency guarantees come from running the model next to the
-  sensor, not from distributing it.
+ sensor, not from distributing it.
 - Multi-node would need auth, service discovery, mTLS, and a
-  non-single-user mental model, all of which contradict "install with
-  one command and forget."
+ non-single-user mental model, all of which contradict "install with
+ one command and forget."
 
 Horizontal within one device: the supervisor can spawn multiple
 instances of the same worker (`vision-1`, `vision-2`, ...) and the
@@ -567,14 +567,14 @@ to a central log. That is a separate product, not a feature here.
 
 Explicit non-features. Each saves a lot of complexity.
 
-| Not here                      | Why                                                              |
+| Not here | Why |
 | ----------------------------- | ---------------------------------------------------------------- |
-| Multi-tenant auth             | One device, one owner. Add OIDC later only if needed.            |
-| Multi-node scheduling         | Kubernetes isn't the deployment unit for a Pi.                   |
-| Model training                | Edge is for inference; training stays off-device.                |
-| Cloud sync                    | Opt-in, not default. Audit log can be forwarded to Loki/Grafana. |
-| GUI model-marketplace browser | `scripts/download-default-models.sh` + CLI is enough today.      |
-| Plugin system                 | A new worker IS a plugin. Drop a package in `workers/`, done.    |
+| Multi-tenant auth | One device, one owner. Add OIDC later only if needed. |
+| Multi-node scheduling | Kubernetes isn't the deployment unit for a Pi. |
+| Model training | Edge is for inference; training stays off-device. |
+| Cloud sync | Opt-in, not default. Audit log can be forwarded to Loki/Grafana. |
+| GUI model-marketplace browser | `scripts/download-default-models.sh` + CLI is enough today. |
+| Plugin system | A new worker IS a plugin. Drop a package in `workers/`, done. |
 
 ---
 
@@ -584,33 +584,33 @@ Where every important file lives:
 
 ```
 arikizu/
-  Cargo.toml                  workspace manifest
-  arikizu.yaml.example        reference pipeline + worker config
-  capabilities.toml           29 capabilities declared here
-  Makefile                    one-liner wrappers around cargo+uv
+ Cargo.toml workspace manifest
+ arikizu.yaml.example reference pipeline + worker config
+ capabilities.toml 29 capabilities declared here
+ Makefile one-liner wrappers around cargo+uv
 
-  crates/<9 crates>/          Rust workspace (see section 3)
+ crates/<9 crates>/ Rust workspace (see section 3)
 
-  workers/<10 workers>/       Python workspace (see section 5)
-  workers/arikizu-worker-sdk/ the SDK every worker imports
+ workers/<10 workers>/ Python workspace (see section 5)
+ workers/arikizu-worker-sdk/ the SDK every worker imports
 
-  ui/static/index.html        operator dashboard served at /
-  ui/static/assets/           logo, favicon
+ ui/static/index.html operator dashboard served at /
+ ui/static/assets/ logo, favicon
 
-  demo/web/*.html             developer sandbox served at /demo/
-  demo/fixtures/              sample inputs for the demos
-  demo/raspberrypi/           Pi-only probe + camera scripts
+ demo/web/*.html developer sandbox served at /demo/
+ demo/fixtures/ sample inputs for the demos
+ demo/raspberrypi/ Pi-only probe + camera scripts
 
-  policies/*.yaml             declarative rules
-  golden/*.yaml               eval ground truth
+ policies/*.yaml declarative rules
+ golden/*.yaml eval ground truth
 
-  models/*.onnx               downloaded on demand
-  data/audit.sqlite           created on first run
+ models/*.onnx downloaded on demand
+ data/audit.sqlite created on first run
 
-  scripts/                    bootstrap, check_prereqs, model download
-  packaging/                  debian/, pi-gen/, systemd/
+ scripts/ bootstrap, check_prereqs, model download
+ packaging/ debian/, pi-gen/, systemd/
 
-  docs/                       this folder
+ docs/ this folder
 ```
 
 ---

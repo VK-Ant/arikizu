@@ -2,7 +2,7 @@
 name = "vision-worker"
 version = "0.0.1"
 description = "Arikizu vision worker; wraps SightRAG for detection and OCR"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     # Pinned loosely for v0.1 scaffold. SightRAG itself picks the right backend.

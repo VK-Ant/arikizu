@@ -43,23 +43,115 @@ USE_OPENAI_SHAPE = (
 _LLAMA = {"obj": None, "tried": False}
 
 
-def _demo_response(question: str) -> str:
+# Built-in micro knowledge base. Keeps the demo useful when no real LLM
+# is wired. The matches are keyword-based, not semantic; they are good
+# enough to show the chat UI works and answer "what is Arikizu"-type
+# questions.
+_KB: list[tuple[list[str], str]] = [
+    (
+        ["what", "arikizu"],
+        "Arikizu is an edge-first, offline-first operating system for a single "
+        "device. One Rust supervisor runs ten Python workers behind one capability "
+        "API: vision, audio, documents, reasoning, time series, memory, PII guard, "
+        "eval, and more. Everything runs locally; no cloud account required."
+    ),
+    (
+        ["how", "install"],
+        "On Linux or WSL: `scripts/check_prereqs.sh && scripts/bootstrap.sh && "
+        "make build && make run`. Open http://localhost:7000/ in your browser. "
+        "Full walkthrough is in docs/SETUP.md."
+    ),
+    (
+        ["prerequisite", "prereq", "requirement"],
+        "Four things: Rust (via rustup), uv (Python package manager), git, and make. "
+        "On low-RAM devices like Pi 4, add 4 GB swap. The script "
+        "`scripts/check_prereqs.sh` tells you what is missing."
+    ),
+    (
+        ["vision", "detect", "camera"],
+        "The vision worker handles object detection, segmentation, and tracking. "
+        "The default model is a compact ONNX detector. Click the Vision card on "
+        "the dashboard, then Start (fixture) or Use webcam. The webcam button uses "
+        "the browser's camera, so no OS-level camera passthrough is needed."
+    ),
+    (
+        ["audio", "speech", "transcribe", "voice"],
+        "The audio worker handles voice activity detection and speech-to-text. "
+        "Upload a short .wav file in the Audio demo and click Analyze. VAD segments "
+        "and transcript appear below the waveform."
+    ),
+    (
+        ["document", "extract", "docs"],
+        "The docs worker extracts fields from text or markdown files using a "
+        "schema you provide. Open the Documents demo, pass the sample.txt file "
+        "and the default schema, click Extract. It returns date, shift, line, "
+        "and defects pulled from the text."
+    ),
+    (
+        ["memory", "recall", "remember"],
+        "The memory worker is session-scoped: update, recall, and reward. It uses "
+        "top-k retrieval with a reward signal that nudges future results. Try the "
+        "Memory demo on the sandbox."
+    ),
+    (
+        ["guard", "pii", "redact", "privacy"],
+        "The guard worker scans text for PII (emails, phone numbers, SSNs, etc.) "
+        "and returns a redacted version alongside the hits. Paste any sensitive "
+        "sample on the Guard demo page."
+    ),
+    (
+        ["model", "swap", "custom"],
+        "Any ONNX, TFLite, OpenVINO, TensorRT, or CoreML model works. Point the "
+        "worker's ARIKIZU_VISION_MODEL (or equivalent) env var at your file. "
+        "The backend is auto-selected per device."
+    ),
+    (
+        ["pi", "raspberry", "jetson", "edge"],
+        "Arikizu runs on Jetson Orin Nano / AGX, Raspberry Pi 4/5, Mac (Apple "
+        "Silicon or Intel), Linux x86_64, and WSL2 on Windows. Same binary, same "
+        "code; backend auto-detects the device. See docs/SETUP.md for the "
+        "device-by-device walkthrough."
+    ),
+    (
+        ["license", "open source", "oss"],
+        "Arikizu is licensed Apache 2.0. The source lives at "
+        "github.com/VK-Ant/arikizu. The brand mark and logo belong to the project."
+    ),
+    (
+        ["hello", "hi", "hey"],
+        "Hello. I am the Arikizu reasoning worker in built-in mode. Ask me about "
+        "what Arikizu is, how to install it, or any specific capability. For "
+        "general knowledge questions, point ARIKIZU_REASONING_GGUF at a local "
+        "GGUF model file or install a local LLM runtime for real LLM answers."
+    ),
+]
+
+
+def _kb_answer(question: str) -> str | None:
+    """Pick a KB entry if its keywords all appear in the question."""
+    q = (question or "").lower()
+    best: tuple[int, str] | None = None
+    for words, answer in _KB:
+        if all(w in q for w in words):
+            score = sum(len(w) for w in words)
+            if best is None or score > best[0]:
+                best = (score, answer)
+    return best[1] if best else None
+
+
+def _builtin_response(question: str) -> str:
+    """Return the KB answer when any keywords match; else a short explainer."""
+    hit = _kb_answer(question)
+    if hit:
+        return hit
     q = (question or "").strip() or "(empty question)"
     return (
-        f"Demo mode. The reasoning worker is up but has no model loaded, "
-        f"so it can only echo back a canned message instead of a real "
-        f"answer.\n\n"
-        f"Your question was: {q!r}\n\n"
-        f"To enable real answers, pick one:\n"
-        f"  - Install a local LLM runtime inside your shell:\n"
-        f"      curl -fsSL https://ollama.com/install.sh | sh\n"
-        f"      ollama serve &\n"
-        f"      ollama pull qwen2.5:0.5b\n"
-        f"  - Or point ARIKIZU_OLLAMA_ENDPOINT at a LAN or cloud endpoint.\n"
-        f"  - Or set ARIKIZU_REASONING_GGUF to a local GGUF model file.\n\n"
-        f"The dashboard, audit log, vision, audio, documents, time series, "
-        f"memory, guard and eval all work without any LLM. Reasoning is "
-        f"the only capability that needs one."
+        f"I am the Arikizu reasoning worker in built-in mode. For your question "
+        f"({q!r}) I have no canned answer. For real LLM responses, point "
+        f"ARIKIZU_REASONING_GGUF at a local GGUF file (any size), set "
+        f"ARIKIZU_OLLAMA_ENDPOINT to a running LLM runtime, or try asking a "
+        f"question about Arikizu itself: what it is, how to install it, how a "
+        f"specific worker works."
     )
 
 
@@ -157,7 +249,7 @@ async def _generate(prompt: str, question: str, max_tokens: int) -> tuple[str, s
     if text:
         return text, "http"
 
-    return _demo_response(question), "demo"
+    return _builtin_response(question), "builtin"
 
 
 def main() -> None:

@@ -109,11 +109,19 @@ echo "${GREEN}tier: ${TIER}${RESET}  →  ${MODELS_DIR}"
 echo
 
 echo "vision:"
+# Use a HuggingFace mirror. The ultralytics GitHub release redirects to
+# objects.githubusercontent.com, which is unreliable inside some networks
+# and inside WSL. HuggingFace resolves cleanly almost everywhere.
+fetch \
+    "https://huggingface.co/Xenova/yolov8n/resolve/main/model.onnx" \
+    "yolov8n.onnx" \
+    "" || \
 fetch \
     "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.onnx" \
     "yolov8n.onnx" \
-    "" && \
-    write_manifest "yolov8n.onnx" "YOLOv8-nano object detection (COCO 80 classes)" "onnx" "AGPL-3.0"
+    ""
+[ -f "$MODELS_DIR/yolov8n.onnx" ] && \
+    write_manifest "yolov8n.onnx" "Compact object detector (ONNX, 80 classes)" "onnx" "AGPL-3.0"
 
 echo
 echo "audio:"
@@ -122,6 +130,17 @@ fetch \
     "silero_vad.onnx" \
     "" && \
     write_manifest "silero_vad.onnx" "Silero voice activity detection" "onnx" "MIT"
+
+echo
+echo "reasoning (small instruct LLM, ~230 MB):"
+# SmolLM2-360M is small enough to ship by default. Q4_K_M quantization,
+# runs on CPU through llama-cpp-python. Nemotron Mini would need 2 GB+
+# so stays out of minimum tier.
+fetch \
+    "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q4_k_m.gguf" \
+    "smollm2-360m-instruct-q4_k_m.gguf" \
+    "" && \
+    write_manifest "smollm2-360m-instruct-q4_k_m.gguf" "Small instruct LLM (Q4)" "llama-cpp" "Apache-2.0"
 
 # Tiny sklearn baselines for timeseries + memory, generated locally if python+sklearn present.
 echo
@@ -154,10 +173,10 @@ if [ "$TIER" = "standard" ] || [ "$TIER" = "full" ]; then
     echo
     echo "audio (standard):"
     fetch \
-        "https://huggingface.co/openai/whisper-tiny.en/resolve/main/onnx/encoder_model.onnx" \
+        "https://huggingface.co/onnx-community/whisper-tiny.en-ONNX/resolve/main/onnx/encoder_model.onnx" \
         "whisper-tiny.en-encoder.onnx" \
         "" && \
-        write_manifest "whisper-tiny.en-encoder.onnx" "Whisper tiny.en encoder" "onnx" "MIT"
+        write_manifest "whisper-tiny.en-encoder.onnx" "ASR encoder (tiny)" "onnx" "MIT"
 
     echo
     echo "embeddings (shared by docs, memory, eval):"
@@ -171,21 +190,17 @@ if [ "$TIER" = "standard" ] || [ "$TIER" = "full" ]; then
         "all-MiniLM-L6-v2.tokenizer.json" \
         "" || true
 
-    echo
-    echo "vision (standard):"
-    fetch \
-        "https://huggingface.co/ChaoningZhang/MobileSAM/resolve/main/mobile_sam.onnx" \
-        "mobile_sam.onnx" \
-        "" && \
-        write_manifest "mobile_sam.onnx" "MobileSAM lightweight segmentation" "onnx" "Apache-2.0"
+    # MobileSAM moved around; skip in standard tier to avoid a flaky
+    # dependency on third-party host paths. People who want segmentation
+    # install SightRAG for the full pipeline (Weekend 5).
 
     echo
-    echo "reasoning (small local LLM, ~400 MB):"
+    echo "reasoning (larger instruct LLM, ~400 MB):"
     fetch \
         "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf" \
         "qwen2.5-0.5b-instruct-q4_k_m.gguf" \
         "" && \
-        write_manifest "qwen2.5-0.5b-instruct-q4_k_m.gguf" "Small instruct LLM (Q4 quantized)" "llama-cpp" "Apache-2.0"
+        write_manifest "qwen2.5-0.5b-instruct-q4_k_m.gguf" "Small instruct LLM (Q4)" "llama-cpp" "Apache-2.0"
 fi
 
 # ---------------------------------------------------------------------------

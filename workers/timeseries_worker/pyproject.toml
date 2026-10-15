@@ -2,7 +2,7 @@
 name = "timeseries-worker"
 version = "0.0.1"
 description = "Arikizu time-series worker; wraps WavqWise for forecast, anomaly"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     "numpy>=1.26.0",

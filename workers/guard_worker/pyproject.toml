@@ -2,7 +2,7 @@
 name = "guard-worker"
 version = "0.0.1"
 description = "Arikizu guard worker; wraps AntGuard for scan, redact, audit"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     # "antguard>=0.1.0",
