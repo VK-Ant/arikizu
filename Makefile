@@ -128,8 +128,11 @@ bundle:
 # ---------------------------------------------------------------------------
 # doctor
 # ---------------------------------------------------------------------------
-doctor: build
-	./target/debug/arikizu status --dev
+# Shell-level self-check: python version, pip packages, model files, build
+# artifact, and HTTP supervisor. Works even if the build or supervisor is
+# broken, which is when you most need it.
+doctor:
+	@bash scripts/doctor.sh
 
 # ---------------------------------------------------------------------------
 # demo

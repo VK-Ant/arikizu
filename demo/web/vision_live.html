@@ -58,6 +58,11 @@
   </header>
 
   <main>
+    <div id="model-banner" style="padding:12px 16px; margin-bottom:16px; border-radius:6px; border:1px solid var(--border); background:var(--card); font-family:var(--mono); font-size:13px;">
+      <span id="model-dot" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#999; margin-right:8px; vertical-align:middle;"></span>
+      <span id="model-text">checking vision model...</span>
+      <span id="model-hint" style="color:var(--muted); margin-left:12px;"></span>
+    </div>
     <div class="controls">
       <label>image path:</label>
       <input id="path" type="text" value="demo/fixtures/scene.jpg"
@@ -269,6 +274,36 @@ async function tickWebcam() {
     setStatus("error: " + e.message);
   }
 }
+
+// --- Model status banner on page load ---
+async function checkModel() {
+  try {
+    const r = await fetch("/api/v1/call/vision/backends", {
+      method: "POST", headers: {"content-type":"application/json"},
+      body: JSON.stringify({payload: {}}),
+    });
+    const b = await r.json();
+    const dot = document.getElementById("model-dot");
+    const text = document.getElementById("model-text");
+    const hint = document.getElementById("model-hint");
+    const loaded = b.loaded || b.model_loaded || !!b.model;
+    const model = (b.model || b.model_path || "").split("/").pop() || "yolov8n.onnx";
+    if (loaded) {
+      dot.style.background = "var(--pass)";
+      text.textContent = `vision model loaded: ${model}`;
+      hint.textContent = "detection and segmentation ready";
+    } else {
+      dot.style.background = "var(--fail)";
+      text.textContent = "no vision model loaded";
+      hint.innerHTML = 'fix: run <code style="background:var(--bg);padding:1px 6px;border-radius:3px">scripts/download-default-models.sh</code> then restart with <code style="background:var(--bg);padding:1px 6px;border-radius:3px">make run</code>';
+    }
+  } catch (e) {
+    document.getElementById("model-dot").style.background = "var(--fail)";
+    document.getElementById("model-text").textContent = "runtime unreachable";
+    document.getElementById("model-hint").textContent = "start the supervisor: make run";
+  }
+}
+checkModel();
 
 document.getElementById("webcam").onclick = async () => {
   if (webcamStream) {

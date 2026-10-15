@@ -331,6 +331,20 @@ def main() -> None:
 
     worker = Worker("reasoning")
 
+    @worker.handler("reasoning.backends")
+    def backends() -> dict[str, Any]:
+        """Report which backend path is available. The demo hub reads this
+        to show a PASS/FAIL diagnostic row for the reasoning worker.
+        """
+        return {
+            "gguf_path": GGUF_PATH or "(none)",
+            "gguf_exists": bool(gguf_exists),
+            "gguf_loaded": bool(gguf_exists and llama_cpp_installed),
+            "llama_cpp_installed": bool(llama_cpp_installed),
+            "http_endpoint": HTTP_LLM_ENDPOINT or "(disabled)",
+            "model": MODEL,
+        }
+
     @worker.handler("reasoning.answer")
     async def answer(question: str = "", context: str = "", max_tokens: int = 256) -> dict[str, Any]:
         prompt = f"Context:\n{context}\n\nQuestion: {question}\nAnswer:"

@@ -109,6 +109,14 @@ output = "object"
 timeout_ms = 30000
 priority = 0
 
+[audio_backends]
+name = "audio.backends"
+worker = "audio"
+input = {}
+output = "object"
+timeout_ms = 5000
+priority = 0
+
 # ---------------------------------------------------------------------------
 # docs (DocQWise; Weekend 7)
 # ---------------------------------------------------------------------------
@@ -161,6 +169,14 @@ worker = "reasoning"
 input = { prompt = "string", max_tokens = "integer" }
 output = "object"
 timeout_ms = 120000
+priority = 0
+
+[reasoning_backends]
+name = "reasoning.backends"
+worker = "reasoning"
+input = {}
+output = "object"
+timeout_ms = 5000
 priority = 0
 
 # ---------------------------------------------------------------------------

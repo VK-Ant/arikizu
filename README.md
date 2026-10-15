@@ -131,6 +131,17 @@ make smoke
 Expected: `0 failing`. WAIT means a library is scaffolded but the real
 library is not yet wired; same code path, no fix needed to run demos.
 
+**If a demo is not working**, run the one-shot diagnostic:
+
+```
+make doctor
+```
+
+It prints PASS/FAIL per component (python version, onnxruntime, llama-cpp,
+yolov8n.onnx, silero_vad.onnx, SmolLM2 GGUF, supervisor http) and the
+exact fix line for each failure. Most "nothing works" problems are one
+missing model file; `scripts/download-default-models.sh` fixes that.
+
 Call a capability by hand:
 
 ```

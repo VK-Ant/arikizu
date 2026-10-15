@@ -37,6 +37,12 @@
 <body>
   <header><h1 style="margin:0;font-size:20px">Arikizu Audio</h1></header>
   <main>
+    <div id="model-banner" style="padding:12px 16px; margin-bottom:16px; border-radius:6px; border:1px solid var(--border); background:var(--card); font-family:var(--mono); font-size:13px;">
+      <span id="model-dot" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#999; margin-right:8px; vertical-align:middle;"></span>
+      <span id="model-text">checking audio stack...</span>
+      <span id="model-hint" style="color:var(--muted); margin-left:12px;"></span>
+    </div>
+
     <div class="ctl">
       <label>audio path:</label>
       <input id="path" type="text" value="demo/fixtures/sample.wav" style="min-width:220px">
@@ -51,7 +57,11 @@
     <div class="ctl" style="margin-top:12px">
       <label>keywords (comma):</label>
       <input id="keywords" type="text" value="help, stop, alice" placeholder="e.g. help, stop, alice" style="min-width:260px">
-      <span style="color:var(--muted);font-size:12px">spoken keyword hints while mic is on; VAD-based, pending full ASR</span>
+      <span id="asr-status" style="color:var(--muted);font-size:12px">keyword matching: using browser speech recognition when mic is on</span>
+    </div>
+    <div class="ctl" style="margin-top:12px">
+      <strong>Live transcript</strong>
+      <span id="live-transcript" style="color:var(--muted);font-style:italic;min-width:300px">(speak once the mic is on)</span>
     </div>
 
     <div class="viz">
@@ -278,6 +288,130 @@ function stopMic() {
 
 document.getElementById("mic").onclick = () => {
   if (micStream) stopMic(); else startMic();
+};
+
+// --- Model status banner on page load ---
+async function checkAudio() {
+  try {
+    const r = await fetch("/api/v1/call/audio/backends", {
+      method: "POST", headers: {"content-type":"application/json"},
+      body: JSON.stringify({payload: {}}),
+    });
+    const b = await r.json();
+    const dot  = document.getElementById("model-dot");
+    const text = document.getElementById("model-text");
+    const hint = document.getElementById("model-hint");
+    if (b.vad_loaded) {
+      dot.style.background = "var(--pass)";
+      text.textContent = `VAD loaded: ${(b.vad_path||"").split("/").pop()}`;
+      hint.textContent = "voice-activity detection ready";
+    } else {
+      dot.style.background = "var(--fail)";
+      text.textContent = "no VAD model loaded";
+      hint.innerHTML = 'fix: run <code style="background:var(--bg);padding:1px 6px;border-radius:3px">scripts/download-default-models.sh</code>';
+    }
+  } catch (e) {
+    document.getElementById("model-dot").style.background = "var(--fail)";
+    document.getElementById("model-text").textContent = "runtime unreachable";
+    document.getElementById("model-hint").textContent = "start the supervisor: make run";
+  }
+}
+checkAudio();
+
+// --- Real keyword matching via browser Web Speech API ---
+// VAD alone cannot tell "I need help" from "nice to meet you". Chrome and
+// Edge ship a free, offline-capable speech recognizer; we use it to do real
+// phonetic matching for the keyword list. Server VAD still runs in parallel
+// for the speech/silence indicator and audit log.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null;
+
+function startRecognizer() {
+  if (!SR) {
+    document.getElementById("asr-status").textContent =
+      "keyword matching: this browser has no SpeechRecognition; try Chrome or Edge";
+    document.getElementById("asr-status").style.color = "var(--wait)";
+    return;
+  }
+  try {
+    recognizer = new SR();
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
+    recognizer.lang = "en-US";
+    recognizer.onresult = (event) => {
+      let interim = "", finalTxt = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalTxt += t; else interim += t;
+      }
+      const shown = (finalTxt + " " + interim).trim();
+      if (shown) {
+        document.getElementById("live-transcript").textContent = shown;
+        document.getElementById("live-transcript").style.fontStyle = "normal";
+        document.getElementById("live-transcript").style.color = "var(--fg)";
+      }
+      // Check keywords against latest utterance (local, instant)
+      const kwRaw = (document.getElementById("keywords") || {}).value || "";
+      const keywords = kwRaw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const haystack = shown.toLowerCase();
+      const localHits = keywords.filter(k => haystack.includes(k));
+      if (localHits.length) {
+        setMicIndicator("KW: " + localHits.join(", "), "var(--pass)");
+      }
+      // Also post FINAL transcripts to the server so hits land in the
+      // audit log and the operator dashboard sees them.
+      if (finalTxt.trim() && keywords.length) {
+        fetch("/api/v1/call/audio/keyword_spot", {
+          method: "POST", headers: {"content-type":"application/json"},
+          body: JSON.stringify({payload: {transcript: finalTxt, keywords}}),
+        }).catch(() => {});
+      }
+    };
+    recognizer.onerror = (e) => {
+      // "no-speech" fires routinely; ignore it
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      document.getElementById("asr-status").textContent =
+        "keyword matching: speech recognition error (" + e.error + ")";
+    };
+    recognizer.onend = () => {
+      // Auto-restart while mic is on
+      if (micStream && recognizer) {
+        try { recognizer.start(); } catch (e) { /* already starting */ }
+      }
+    };
+    recognizer.start();
+    document.getElementById("asr-status").textContent =
+      "keyword matching: browser speech recognition active";
+    document.getElementById("asr-status").style.color = "var(--pass)";
+  } catch (e) {
+    document.getElementById("asr-status").textContent =
+      "keyword matching: could not start recognizer: " + e.message;
+  }
+}
+
+function stopRecognizer() {
+  if (recognizer) {
+    try { recognizer.onend = null; recognizer.stop(); } catch (e) {}
+    recognizer = null;
+  }
+  document.getElementById("asr-status").textContent =
+    "keyword matching: using browser speech recognition when mic is on";
+  document.getElementById("asr-status").style.color = "var(--muted)";
+  document.getElementById("live-transcript").textContent = "(speak once the mic is on)";
+  document.getElementById("live-transcript").style.fontStyle = "italic";
+  document.getElementById("live-transcript").style.color = "var(--muted)";
+}
+
+// Replace mic click so starting/stopping the mic also toggles the recognizer.
+// The server-side VAD chunker still runs in parallel; this is additive.
+document.getElementById("mic").onclick = async () => {
+  if (micStream) {
+    stopRecognizer();
+    stopMic();
+  } else {
+    await startMic();
+    if (micStream) startRecognizer();
+  }
 };
 </script>
 </body>

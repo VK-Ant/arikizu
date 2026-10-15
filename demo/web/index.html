@@ -113,6 +113,11 @@
     <h2>One-click smoke test</h2>
     <button class="smoke-btn" id="smoke-run">Run smoke test</button>
     <div class="smoke-wrap" id="smoke-results"></div>
+
+    <h2>Diagnostics</h2>
+    <div class="smoke-wrap" id="diag-results">
+      <span style="color:var(--muted);font-size:12px">Shows which models and workers are present. If a demo isn't working, this tells you why.</span>
+    </div>
   </main>
 
 <script>
@@ -209,6 +214,49 @@ document.getElementById("smoke-run").onclick = async () => {
 
 pollStatus();
 setInterval(pollStatus, 3000);
+
+// --- Diagnostics: one line per model, PASS/FAIL ---
+async function runDiag() {
+  const el = document.getElementById("diag-results");
+  el.innerHTML = `<div class="smoke-row" style="color: var(--muted); font-weight: 500"><div>status</div><div>component</div><div style="text-align: right"></div></div>`;
+  const checks = [
+    {label: "vision model (yolov8n.onnx)", cap: "vision/backends",
+     pass: b => b.loaded || b.model_loaded || !!b.model,
+     fix: "scripts/download-default-models.sh"},
+    {label: "audio VAD (silero_vad.onnx)", cap: "audio/backends",
+     pass: b => b.vad_loaded,
+     fix: "scripts/download-default-models.sh"},
+    {label: "reasoning LLM (SmolLM2 gguf)", cap: "reasoning/backends",
+     pass: b => b.gguf_loaded || b.loaded || !!b.gguf_path && b.gguf_path !== "(none)",
+     fix: "scripts/download-default-models.sh"},
+  ];
+  for (const c of checks) {
+    let row = "";
+    try {
+      const r = await fetch(`/api/v1/call/${c.cap}`, {
+        method: "POST", headers: {"content-type":"application/json"},
+        body: JSON.stringify({payload: {}}),
+      });
+      const b = await r.json();
+      const ok = c.pass(b);
+      row = `
+        <div class="smoke-row">
+          <div><span class="status-tag ${ok?'PASS':'FAIL'}">${ok?'READY':'MISSING'}</span></div>
+          <div class="smoke-cap">${c.label}<br><span class="smoke-detail">${ok?'loaded':'run: '+c.fix}</span></div>
+          <div></div>
+        </div>`;
+    } catch (e) {
+      row = `
+        <div class="smoke-row">
+          <div><span class="status-tag FAIL">OFFLINE</span></div>
+          <div class="smoke-cap">${c.label}<br><span class="smoke-detail">runtime unreachable</span></div>
+          <div></div>
+        </div>`;
+    }
+    el.innerHTML += row;
+  }
+}
+runDiag();
 </script>
 </body>
 </html>
