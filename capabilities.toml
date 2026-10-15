@@ -42,6 +42,14 @@ timeout_ms = 30000
 emits_events = ["vision.detected"]
 priority = 0
 
+[vision_segment]
+name = "vision.segment"
+worker = "vision"
+input = { image_path = "string", confidence = "number" }
+output = "object"
+timeout_ms = 30000
+priority = 0
+
 [vision_ocr]
 name = "vision.ocr"
 worker = "vision"

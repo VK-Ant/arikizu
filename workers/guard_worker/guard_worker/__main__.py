@@ -13,22 +13,46 @@ from typing import Any
 
 from arikizu_worker import Worker
 
-# Simple regex patterns for the v0.1 placeholder. AntGuard brings a real
-# detector suite in Weekend 10.
-EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-PHONE_RE = re.compile(r"\+?\d[\d \-()]{7,}\d")
-AADHAAR_RE = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
+# Rule set wired to AntGuard semantics (full ML-based detectors land
+# weekend 10). Each pattern tagged with a severity so the UI can
+# triage without re-running.
+_PATTERNS: list[tuple[str, re.Pattern, str]] = [
+    ("email",     re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "warn"),
+    ("phone",     re.compile(r"\+?\d[\d \-()]{7,}\d"), "warn"),
+    ("aadhaar",   re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"), "high"),
+    ("ssn",       re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "high"),
+    ("credit_card", re.compile(r"\b(?:\d[ -]*?){13,16}\b"), "high"),
+    ("ipv4",      re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), "info"),
+    ("url",       re.compile(r"https?://\S+"), "info"),
+    ("api_key",   re.compile(r"\b(?:sk|pk|AKIA)[A-Za-z0-9_\-]{16,}\b"), "high"),
+    ("pan_india", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"), "high"),
+    ("iban",      re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), "warn"),
+]
 
 
 def _detect(text: str) -> list[dict[str, Any]]:
     findings = []
-    for match in EMAIL_RE.finditer(text):
-        findings.append({"kind": "email", "span": [match.start(), match.end()], "text": match.group()})
-    for match in PHONE_RE.finditer(text):
-        findings.append({"kind": "phone", "span": [match.start(), match.end()], "text": match.group()})
-    for match in AADHAAR_RE.finditer(text):
-        findings.append({"kind": "aadhaar", "span": [match.start(), match.end()]})
+    for kind, pat, sev in _PATTERNS:
+        for match in pat.finditer(text):
+            findings.append({
+                "kind": kind,
+                "severity": sev,
+                "span": [match.start(), match.end()],
+                "text": match.group(),
+            })
     return findings
+
+
+def _summary(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-kind count for the UI."""
+    counts: dict[str, int] = {}
+    worst = "ok"
+    rank = {"ok": 0, "info": 1, "warn": 2, "high": 3}
+    for f in findings:
+        counts[f["kind"]] = counts.get(f["kind"], 0) + 1
+        if rank.get(f.get("severity", "info"), 1) > rank.get(worst, 0):
+            worst = f.get("severity", "info")
+    return {"counts": counts, "worst_severity": worst}
 
 
 def main() -> None:
@@ -42,7 +66,14 @@ def main() -> None:
     @worker.handler("guard.scan")
     def scan(text: str = "") -> dict[str, Any]:
         findings = _detect(text)
-        return {"findings": findings, "severity": "warn" if findings else "ok"}
+        s = _summary(findings)
+        return {
+            "findings": findings,
+            "summary": s["counts"],
+            "severity": s["worst_severity"],
+            "detector_count": len(_PATTERNS),
+            "chars_scanned": len(text),
+        }
 
     @worker.handler("guard.redact")
     def redact(text: str = "", replacement: str = "[REDACTED]") -> dict[str, Any]:

@@ -124,21 +124,49 @@ def _nms(xyxy: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.45) -> list
     return kept
 
 
-def _run_inference(sess, img: Image.Image, conf_thresh: float) -> dict:
-    """Run YOLOv8n ONNX on a PIL image. Returns the detect-handler payload."""
+def _run_inference(sess, img: Image.Image, conf_thresh: float,
+                   logger: logging.Logger = None) -> dict:
+    """Run YOLO ONNX on a PIL image. Handles several export shapes."""
     img_w, img_h = img.size
     x, scale, pad_x, pad_y = _letterbox(img, INPUT_SIZE)
     input_name = sess.get_inputs()[0].name
     outputs = sess.run(None, {input_name: x})
-    out = outputs[0]  # (1, 84, 8400) for YOLOv8
-    out = np.squeeze(out, axis=0)
-    # Guess shape; some exports are (84, 8400), others (8400, 84)
-    if out.shape[0] < out.shape[1]:
-        out = out.T  # -> (anchors, 84)
+    out = outputs[0]
+    out = np.squeeze(out, axis=0) if out.shape[0] == 1 else out
+
+    # Normalize to (N, >=5) with columns [cx, cy, w, h, score, ...classes]
+    # or (N, 4+classes) for YOLOv8.
+    if out.ndim == 2 and out.shape[0] in (84, 85):
+        # (84 or 85, N) -> (N, 84 or 85)
+        out = out.T
+    elif out.ndim != 2:
+        if logger:
+            logger.warning("unexpected output shape %s", out.shape)
+        return {"width": img_w, "height": img_h, "detections": [],
+                "backend": "onnx-shape-mismatch",
+                "note": f"model output shape {out.shape} not recognized"}
+
     boxes_cxcywh = out[:, :4]
-    class_scores = out[:, 4:]
+    n_cols = out.shape[1]
+    if n_cols >= 84:
+        # YOLOv8: 4 bbox + 80 class scores (sometimes already sigmoid'd)
+        class_scores = out[:, 4:4 + 80]
+    elif n_cols == 85:
+        # YOLOv5: 4 bbox + 1 objectness + 80 class scores
+        objectness = out[:, 4:5]
+        class_scores = out[:, 5:] * objectness
+    else:
+        class_scores = out[:, 4:]
+
+    # Apply sigmoid if the scores look like raw logits (outside [0, 1]).
+    if class_scores.size > 0 and (class_scores.max() > 1.5 or class_scores.min() < -0.1):
+        class_scores = 1.0 / (1.0 + np.exp(-class_scores))
+
     class_ids = np.argmax(class_scores, axis=1)
     confidences = class_scores[np.arange(len(class_ids)), class_ids]
+    if logger:
+        logger.debug("inference: anchors=%d max_conf=%.2f at thresh %.2f",
+                     len(confidences), float(confidences.max() if len(confidences) else 0), conf_thresh)
     mask = confidences > conf_thresh
     boxes_cxcywh = boxes_cxcywh[mask]
     class_ids = class_ids[mask]
@@ -244,15 +272,60 @@ def main() -> None:
                 ),
             }
         try:
-            result = _run_inference(_SESSION, img, confidence)
+            result = _run_inference(_SESSION, img, confidence, logger)
             result["image"] = image_path or "(webcam frame)"
+            # Add a visible note when no detections so the UI can show it
+            if not result.get("detections"):
+                result.setdefault(
+                    "note",
+                    f"model ran but found no objects above confidence {confidence}. "
+                    "Try lowering conf, or move more objects into the frame."
+                )
+            return result
+        except Exception as e:
+            logger.exception("inference failed")
+            return {
+                "image": image_path or "(webcam frame)",
+                "detections": [],
+                "backend": "error",
+                "note": f"inference failed: {e}",
+            }
+
+    @worker.handler("vision.segment")
+    def segment(image_path: str = "", image_base64: str = "",
+                confidence: float = 0.25) -> dict[str, Any]:
+        """Segmentation using the default detector + bounding-box mask.
+        For a true pixel-level mask, download yolov8n-seg.onnx and point
+        ARIKIZU_VISION_MODEL at it; same handler reads whichever is set.
+        """
+        img = _load_pil(image_path, image_base64)
+        if img is None or _SESSION is None:
+            return {
+                "image": image_path or "(no image)",
+                "detections": [],
+                "backend": "no-model",
+                "note": "no model loaded. Run scripts/download-default-models.sh",
+            }
+        try:
+            result = _run_inference(_SESSION, img, confidence, logger)
+            result["image"] = image_path or "(webcam frame)"
+            # Mark the detections as "segments" so the UI knows to fill
+            for d in result.get("detections", []):
+                d["is_segment"] = True
+            result["mode"] = "segment"
+            if not result.get("detections"):
+                result.setdefault(
+                    "note",
+                    f"segmentation returned nothing above conf {confidence}. "
+                    "Lower conf, hold objects clearly in frame, or install yolov8n-seg.onnx.",
+                )
             return result
         except Exception as e:
             return {
                 "image": image_path or "(webcam frame)",
                 "detections": [],
                 "backend": "error",
-                "note": f"inference failed: {e}",
+                "note": f"segmentation failed: {e}",
             }
 
     @worker.handler("vision.ocr")

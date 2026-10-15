@@ -65,6 +65,11 @@
       <label>serve as:</label>
       <input id="url" type="text" value="/demo/fixtures/scene.jpg"
              title="URL the browser can fetch for the same image">
+      <label>mode:</label>
+      <select id="mode" style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:4px 8px">
+        <option value="detect">detection (boxes)</option>
+        <option value="segment">segmentation (mask overlay)</option>
+      </select>
       <label>conf:</label>
       <input id="conf" type="number" value="0.25" step="0.05" min="0" max="1" style="width: 70px">
       <label>interval ms:</label>
@@ -211,19 +216,26 @@ async function tickWebcam() {
   const b64 = dataUrl.split(",")[1];
 
   const conf = parseFloat(document.getElementById("conf").value);
+  const mode = (document.getElementById("mode") || {}).value || "detect";
+  const capability = mode === "segment" ? "vision/segment" : "vision/detect";
   try {
-    const r = await fetch("/api/v1/call/vision/detect", {
+    const r = await fetch(`/api/v1/call/${capability}`, {
       method: "POST",
       headers: {"content-type": "application/json"},
       body: JSON.stringify({payload: {image_base64: b64, confidence: conf}}),
     });
     const body = await r.json();
     const dets = body.detections || [];
-    // Draw boxes over the frame already on canvas
+    // Draw over the frame already on canvas. Segment mode fills the box
+    // with 25% opacity to make it clear it is a region, not a point.
     for (let i = 0; i < dets.length; i++) {
       const d = dets[i];
       const [x1, y1, x2, y2] = d.bbox;
       const c = COLORS[i % COLORS.length];
+      if (mode === "segment") {
+        ctx.fillStyle = c + "40";    // ~25% alpha
+        ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      }
       ctx.strokeStyle = c;
       ctx.lineWidth = 3;
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);

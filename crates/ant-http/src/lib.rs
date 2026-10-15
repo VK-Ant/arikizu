@@ -217,9 +217,46 @@ async fn call_capability(
         None => return (StatusCode::SERVICE_UNAVAILABLE, format!("worker `{}` not running", spec.worker)).into_response(),
     };
 
-    match worker.call(&full_name, body.payload, spec.timeout_ms).await {
-        Ok(result) => Json(result).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    match worker.call(&full_name, body.payload.clone(), spec.timeout_ms).await {
+        Ok(result) => {
+            // Write a trimmed row to the audit log so views like
+            // vision_search can query past calls. The full payload is
+            // skipped (base64 webcam frames would blow up the DB); only
+            // the result summary and small payload keys land here.
+            let payload_summary = match &body.payload {
+                serde_json::Value::Object(m) => {
+                    let mut out = serde_json::Map::new();
+                    for (k, v) in m.iter() {
+                        if k == "image_base64" || k == "pcm" || k == "file_text" {
+                            out.insert(k.clone(), serde_json::json!(format!("<{} bytes>", match v {
+                                serde_json::Value::String(s) => s.len(),
+                                serde_json::Value::Array(a) => a.len(),
+                                _ => 0,
+                            })));
+                        } else {
+                            out.insert(k.clone(), v.clone());
+                        }
+                    }
+                    serde_json::Value::Object(out)
+                }
+                _ => body.payload.clone(),
+            };
+            let row = serde_json::json!({
+                "capability": full_name,
+                "payload": payload_summary,
+                "result": result,
+            });
+            let _ = state.audit.append(&full_name, None, None, &row);
+            Json(result).into_response()
+        }
+        Err(e) => {
+            let _ = state.audit.append(
+                &format!("{full_name}.error"),
+                None, None,
+                &serde_json::json!({"error": e.to_string()}),
+            );
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        }
     }
 }
 

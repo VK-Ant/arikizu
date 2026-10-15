@@ -1,31 +1,34 @@
 # Arikizu v1.5
 
-## v1.5.26 (fix demo gaps + audio keyword spot)
+## v1.5.28 (segmentation dropdown + Vision Search fix)
 
-Three real fixes:
+Two significant fixes based on screenshots and feedback:
 
-1. **Demo hub labels corrected.** Reasoning no longer says "needs
-   Ollama" (it has not for 10 releases). Audio and Docs no longer
-   say "partial". New tags: "live LLM", "live mic", "upload+QA".
+1. **Vision Search now actually works.**
+   Root cause: the HTTP layer wasn't writing capability calls to the
+   audit log. Only /api/v1/stop was. So Vision Search queried for
+   past vision.detect rows and found zero.
 
-2. **Golden set shipped and eval_worker fixed.**
-   `golden/default.jsonl` now ships with 5 example rows. The eval
-   worker's golden_run handler now actually runs the evaluation:
-   returns per-row scores, pass/fail per row, overall pass rate, and
-   mean Jaccard. "golden set not found" error is gone (unless you
-   name a set that doesn't exist).
+   Fixed in `crates/ant-http/src/lib.rs`: every capability call is now
+   logged with capability name, trimmed payload (base64 image bytes
+   stripped and replaced with size markers so the DB stays small),
+   and full result. Errors are logged separately with ".error" suffix
+   so dashboards can filter them.
 
-3. **Audio keyword spotter added.**
-   New `audio.keyword_spot` capability + UI field for comma-separated
-   keywords. While the mic is on, every chunk is sent through the
-   keyword spotter (VAD segments mapped to each requested keyword).
-   Mic indicator shows "KW: help, stop" when a keyword is flagged.
-   Phonetic matching is pending (needs ASR; weekend 6).
+   After this fix, click Vision Live for 10 seconds, go to Vision
+   Search, type "person" → rows appear.
 
-Also added: a note on the audio page explaining why the shipped
-sample.wav gives 0 speech segments (it is a 440Hz sine tone, not
-speech). The microphone path works correctly.
+2. **Detection / segmentation dropdown on Vision Live.**
+   New dropdown in the control row: "detection (boxes)" or
+   "segmentation (mask overlay)". The segment mode calls a new
+   `vision.segment` capability and renders boxes with a 25% colored
+   fill to indicate the region, not just outline. For true per-pixel
+   masks, point ARIKIZU_VISION_MODEL at yolov8n-seg.onnx; same
+   handler loads whichever model file is set.
 
-## v1.5.25 (no more Ollama 404 noise)
-## v1.5.24 (real-time audio + simpler documents)
-## v1.5.23 .. v1.5 (prior history)
+Also: dashboard polls every 5s now show the audit_rows count
+climbing in real time as calls hit any capability.
+
+## v1.5.27 (vision diagnostic + more detectors + ranked memory)
+## v1.5.26 (demo gaps + audio keyword spot)
+## v1.5.25 .. v1.5 (prior history)
