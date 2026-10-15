@@ -281,6 +281,10 @@ document.getElementById("webcam").onclick = async () => {
     setStatus("webcam stopped");
     return;
   }
+  // Stop any fixture timer so the webcam has the status row to itself
+  if (timer) { clearInterval(timer); timer = null; }
+  document.getElementById("start").disabled = false;
+  document.getElementById("stop").disabled = true;
   try {
     setStatus("requesting webcam...");
     webcamStream = await navigator.mediaDevices.getUserMedia({

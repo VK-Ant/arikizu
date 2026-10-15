@@ -201,6 +201,20 @@ def _run_inference(sess, img: Image.Image, conf_thresh: float,
     }
 
 
+def _find_project_root() -> Path:
+    """Walk up from CWD until we see arikizu.yaml.example or Cargo.toml."""
+    p = Path.cwd().resolve()
+    for parent in [p] + list(p.parents):
+        if (parent / "arikizu.yaml.example").exists() or \
+           (parent / "capabilities.toml").exists() or \
+           (parent / "Cargo.toml").exists():
+            return parent
+    return p
+
+
+_PROJECT_ROOT = _find_project_root()
+
+
 def _load_pil(image_path: str, image_base64: str) -> Image.Image | None:
     if image_base64:
         try:
@@ -213,17 +227,21 @@ def _load_pil(image_path: str, image_base64: str) -> Image.Image | None:
     # Try several locations because the worker's CWD may be workers/ when
     # launched from arikizu.yaml, but paths like demo/fixtures/scene.jpg
     # are relative to the repo root.
-    candidates = [Path(image_path)]
-    if not Path(image_path).is_absolute():
+    candidates: list[Path] = []
+    p = Path(image_path)
+    if p.is_absolute():
+        candidates.append(p)
+    else:
         candidates += [
             Path.cwd() / image_path,
-            Path.cwd() / ".." / image_path,
             Path.cwd().parent / image_path,
+            _PROJECT_ROOT / image_path,
+            Path.home() / "arikizu" / image_path,
         ]
-    for p in candidates:
-        if p.exists():
+    for cand in candidates:
+        if cand.exists() and cand.is_file():
             try:
-                return Image.open(p).convert("RGB")
+                return Image.open(cand).convert("RGB")
             except Exception:
                 continue
     return None

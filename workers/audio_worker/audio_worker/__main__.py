@@ -251,7 +251,7 @@ def main() -> None:
         except Exception:
             return {"keywords": keywords, "hits": [], "backend": "bad-input"}
         try:
-            segs = _run_vad(_VAD_SESSION, samples, sr, threshold=0.5)
+            segs = _run_vad(_VAD_SESSION, samples, sr, threshold=max(0.2, float(threshold) if threshold else 0.3))
         except Exception as e:
             return {"keywords": keywords, "hits": [], "backend": "error", "note": str(e)}
         # Each speech segment becomes a possible-keyword hit. Without a

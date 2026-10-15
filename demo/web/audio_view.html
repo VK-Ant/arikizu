@@ -239,7 +239,7 @@ async function startMic() {
         const kwRaw = (document.getElementById("keywords") || {}).value || "";
         const keywords = kwRaw.split(",").map(s => s.trim()).filter(Boolean);
         const path = keywords.length ? "/api/v1/call/audio/keyword_spot" : "/api/v1/call/audio/vad";
-        const payload = {pcm: Array.from(chunk), sample_rate: micSampleRate};
+        const payload = {pcm: Array.from(chunk), sample_rate: micSampleRate, threshold: 0.3};
         if (keywords.length) payload.keywords = keywords;
         const r = await fetch(path, {
           method: "POST", headers: {"content-type":"application/json"},

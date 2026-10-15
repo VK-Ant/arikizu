@@ -86,68 +86,27 @@
   </header>
 
   <main>
-    <h2>Visual views per worker</h2>
+    <h2>Try the demos</h2>
     <div class="grid" id="views">
       <a class="card" href="/demo/vision_live.html">
-        <h3>Vision live <span class="badge">visual</span></h3>
-        <p>Annotated frames in real time with canvas overlay. Bounding boxes, class labels, FPS counter.</p>
-        <span class="pill">vision.detect</span>
-      </a>
-      <a class="card" href="/demo/vision_search.html">
-        <h3>Vision search <span class="badge">visual</span></h3>
-        <p>Query historical detections from the audit log. Filter by class, min score, time window.</p>
-        <span class="pill">audit log</span>
+        <h3>Vision <span class="badge">live webcam</span></h3>
+        <p>Real-time object detection on your webcam (or the shipped fixture image). YOLOv8 inference, boxes and class labels drawn as you move.</p>
+        <span class="pill">vision.detect</span><span class="pill">vision.segment</span>
       </a>
       <a class="card" href="/demo/audio_view.html">
         <h3>Audio <span class="badge">live mic</span></h3>
-        <p>Upload or point at a WAV. Waveform + VAD segments + transcript below.</p>
-        <span class="pill">audio.transcribe</span><span class="pill">audio.vad</span>
-      </a>
-      <a class="card" href="/demo/timeseries_view.html">
-        <h3>Timeseries <span class="badge">visual</span></h3>
-        <p>Line chart of your series. Anomaly markers from Isolation Forest. Forecast overlay.</p>
-        <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
-      </a>
-      <a class="card" href="/demo/guard_view.html">
-        <h3>Guard <span class="badge">visual</span></h3>
-        <p>Paste text. Email, phone, Aadhaar highlighted inline. Redacted preview on the right.</p>
-        <span class="pill">guard.scan</span><span class="pill">guard.redact</span>
-      </a>
-      <a class="card" href="/demo/reasoning_chat.html">
-        <h3>Reasoning chat <span class="badge">live LLM</span></h3>
-        <p>Chat-style interface for reasoning.answer and reasoning.summarize. Streams responses.</p>
-        <span class="pill">reasoning.answer</span><span class="pill">reasoning.summarize</span>
+        <p>Speak into your microphone, see live waveform + voice-activity detection, catch spoken keywords (help, stop, alice).</p>
+        <span class="pill">audio.vad</span><span class="pill">audio.keyword_spot</span>
       </a>
       <a class="card" href="/demo/docs_view.html">
-        <h3>Docs <span class="badge">upload+QA</span></h3>
-        <p>Point at a file. Schema editor. Extracted fields in a form. Tables underneath.</p>
-        <span class="pill">docs.extract</span><span class="pill">docs.table</span>
+        <h3>Documents <span class="badge">upload + ask</span></h3>
+        <p>Upload a PDF or text file, ask any question about it. Local SLM reads your document and answers.</p>
+        <span class="pill">docs.extract</span>
       </a>
-      <a class="card" href="/demo/eval_view.html">
-        <h3>Eval <span class="badge">visual</span></h3>
-        <p>Side-by-side predicted vs expected. Metric scores as cards. Golden-set run button.</p>
-        <span class="pill">eval.score</span><span class="pill">eval.compare</span>
-      </a>
-      <a class="card" href="/demo/memory_view.html">
-        <h3>Memory <span class="badge">visual</span></h3>
-        <p>Browse sessions. Last K items. Reward submit. In-process state in v0.1.</p>
-        <span class="pill">memory.recall</span><span class="pill">memory.update</span>
-      </a>
-    </div>
-
-    <h2>Raw sandbox — every capability, JSON input/output</h2>
-    <div class="grid">
-      <a class="card" href="/demo/raw.html">
-        <h3>JSON sandbox</h3>
-        <p>One tab per worker. Fill payload, hit Call. Shows PASS / WAIT / FAIL + timing + body.</p>
-      </a>
-      <a class="card" href="/api/v1/runtime" target="_blank">
-        <h3>Runtime JSON</h3>
-        <p>Device + per-worker: available runtimes, picked backend, models on disk, model loaded.</p>
-      </a>
-      <a class="card" href="/api/v1/audit?limit=50" target="_blank">
-        <h3>Audit log JSON</h3>
-        <p>Last 50 events. Add <code>?kind=feedback.</code> or <code>?kind=pipeline.</code> to filter.</p>
+      <a class="card" href="/demo/reasoning_chat.html">
+        <h3>Reasoning <span class="badge">local LLM</span></h3>
+        <p>Chat with the local small language model (SmolLM2-360M via llama-cpp). No cloud, no API key.</p>
+        <span class="pill">reasoning.answer</span>
       </a>
     </div>
 
