@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+<title>Arikizu Docs</title>
+<style>
+  :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff; --border:#e5e5e2;
+          --pass:#2d8a4e; --wait:#c89520;
+          --sans:-apple-system,system-ui,Roboto,sans-serif; --mono:ui-monospace,Menlo,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root{--bg:#15150f;--fg:#f0f0ec;--muted:#9b9b96;--accent:#e07a4a;--card:#1f1f18;--border:#2a2a22;color-scheme:dark;}
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{padding:16px 24px;border-bottom:1px solid var(--border);background:var(--card);}
+  main{padding:24px;max-width:1100px;margin:0 auto}
+  .ctl{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,textarea,button{font:inherit;border-radius:4px}
+  input,textarea{background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:5px 8px}
+  textarea{font-family:var(--mono);min-height:100px;width:100%;padding:8px}
+  button{background:var(--accent);color:#fff;border:none;padding:6px 14px;cursor:pointer}
+  .box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-top:16px}
+  .box h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px}
+  .fields{display:grid;grid-template-columns:140px 1fr;gap:6px 16px}
+  .fields dt{color:var(--muted);font-family:var(--mono);font-size:12px}
+  .fields dd{margin:0;font-family:var(--mono);font-size:13px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:3px;font-family:var(--mono);font-size:11px;
+       background:color-mix(in srgb,var(--pass) 20%,transparent);color:var(--pass)}
+  .tag.wait{background:color-mix(in srgb,var(--wait) 20%,transparent);color:var(--wait)}
+</style>
+</head>
+<body>
+<header><h1 style="margin:0;font-size:20px">Arikizu Docs</h1></header>
+<main>
+  <div class="ctl">
+    <label>file path:</label>
+    <input id="path" value="demo/fixtures/sample.txt" style="min-width:260px">
+    <button id="extract">Extract</button>
+    <button id="search" style="background:var(--card);color:var(--fg);border:1px solid var(--border)">Search</button>
+  </div>
+  <div class="box">
+    <h3>Schema (JSON)</h3>
+    <textarea id="schema">{
+  "date": "string",
+  "shift": "string",
+  "line": "integer",
+  "defects": "array"
+}</textarea>
+  </div>
+  <div class="box">
+    <h3>Extracted fields</h3>
+    <div id="status"><span class="tag wait">WAIT</span> not run yet</div>
+    <dl class="fields" id="fields"></dl>
+  </div>
+  <div class="box">
+    <h3>Search (docs.search)</h3>
+    <input id="q" value="defect" placeholder="query" style="min-width:200px">
+    <input id="k" type="number" value="3" style="width:60px">
+    <button id="go-search" style="margin-left:8px">Go</button>
+    <div id="hits" style="margin-top:10px"></div>
+  </div>
+</main>
+<script>
+"use strict";
+async function call(cap, payload) {
+  const [d, op] = cap.split(".");
+  const r = await fetch(`/api/v1/call/${d}/${op}`, {
+    method: "POST", headers: {"content-type":"application/json"},
+    body: JSON.stringify({payload})
+  });
+  return r.json();
+}
+document.getElementById("extract").onclick = async () => {
+  const path = document.getElementById("path").value;
+  let schema = {};
+  try { schema = JSON.parse(document.getElementById("schema").value); }
+  catch(e) { alert("schema invalid: " + e.message); return; }
+  const b = await call("docs.extract", {file_path: path, schema});
+  const stat = document.getElementById("status");
+  if (b.note && /placeholder/i.test(b.note)) {
+    stat.innerHTML = `<span class="tag wait">WAIT</span> ${b.note}`;
+  } else {
+    stat.innerHTML = `<span class="tag">PASS</span> extracted`;
+  }
+  const dl = document.getElementById("fields");
+  dl.innerHTML = "";
+  const fields = b.fields || {};
+  for (const [k, v] of Object.entries(fields)) {
+    dl.innerHTML += `<dt>${k}</dt><dd>${typeof v === "object" ? JSON.stringify(v) : v}</dd>`;
+  }
+  if (!Object.keys(fields).length) dl.innerHTML = `<dt style="color:var(--muted)">no fields</dt><dd></dd>`;
+};
+document.getElementById("go-search").onclick = async () => {
+  const q = document.getElementById("q").value;
+  const k = parseInt(document.getElementById("k").value, 10);
+  const b = await call("docs.search", {query: q, top_k: k});
+  const el = document.getElementById("hits");
+  const hits = b.hits || [];
+  if (b.note && /placeholder/i.test(b.note)) {
+    el.innerHTML = `<span class="tag wait">WAIT</span> ${b.note}`;
+  } else {
+    el.innerHTML = hits.length === 0
+      ? `<span style="color:var(--muted)">no results</span>`
+      : hits.map(h => `<div style="font-family:var(--mono);font-size:12px;padding:4px 0">${JSON.stringify(h)}</div>`).join("");
+  }
+};
+</script>
+</body>
+</html>

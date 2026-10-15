@@ -1,0 +1,17 @@
+#!/bin/sh
+# Debian pre-remove: stop and disable the service.
+
+set -e
+
+case "$1" in
+    remove|purge|upgrade|deconfigure)
+        if [ -d /run/systemd/system ]; then
+            systemctl stop arikizu.service || true
+            systemctl disable arikizu.service || true
+        fi
+        ;;
+    failed-upgrade)
+        ;;
+esac
+
+exit 0

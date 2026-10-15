@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+<title>Arikizu Eval</title>
+<style>
+  :root{--bg:#fafaf7;--fg:#1a1a1a;--muted:#6b6b6b;--accent:#c75c2a;--card:#fff;--border:#e5e5e2;--pass:#2d8a4e;
+        --sans:-apple-system,system-ui,Roboto,sans-serif;--mono:ui-monospace,Menlo,monospace;}
+  @media (prefers-color-scheme: dark){:root{--bg:#15150f;--fg:#f0f0ec;--muted:#9b9b96;--accent:#e07a4a;--card:#1f1f18;--border:#2a2a22;color-scheme:dark;}}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{padding:16px 24px;border-bottom:1px solid var(--border);background:var(--card)}
+  main{padding:24px;max-width:1100px;margin:0 auto}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:700px){.cols{grid-template-columns:1fr}}
+  .box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px}
+  textarea{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:10px;min-height:120px;width:100%;font-family:var(--mono);font-size:13px}
+  button{font:inherit;background:var(--accent);color:#fff;border:none;border-radius:4px;padding:8px 16px;cursor:pointer}
+  .scores{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+  .score{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 20px;text-align:center;min-width:100px}
+  .score .n{font-size:28px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+  .score .l{color:var(--muted);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-top:4px}
+</style>
+</head>
+<body>
+<header><h1 style="margin:0;font-size:20px">Arikizu Eval</h1></header>
+<main>
+  <div class="cols">
+    <div class="box">
+      <label style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em">Predicted</label>
+      <textarea id="pred">the cat sat on the mat</textarea>
+    </div>
+    <div class="box">
+      <label style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em">Expected</label>
+      <textarea id="exp">a cat sat on a mat</textarea>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button id="score">Score</button>
+    <label style="color:var(--muted);font-size:13px">metrics:</label>
+    <select id="metrics" multiple style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;min-width:120px">
+      <option value="exact" selected>exact</option>
+      <option value="jaccard" selected>jaccard</option>
+    </select>
+    <span style="color:var(--muted);font-size:12px">(Cmd/Ctrl-click multiple)</span>
+  </div>
+  <div class="scores" id="scores"></div>
+  <div class="box" style="margin-top:24px">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Golden set run</h3>
+    <input id="golden" value="default" style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:5px 8px">
+    <button id="run-golden" style="margin-left:8px">Run</button>
+    <div id="golden-result" style="margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--muted)"></div>
+  </div>
+</main>
+<script>
+async function call(cap, payload) {
+  const [d, op] = cap.split(".");
+  const r = await fetch(`/api/v1/call/${d}/${op}`, {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({payload})
+  });
+  return r.json();
+}
+document.getElementById("score").onclick = async () => {
+  const predicted = document.getElementById("pred").value;
+  const expected = document.getElementById("exp").value;
+  const metrics = Array.from(document.getElementById("metrics").selectedOptions).map(o => o.value);
+  const b = await call("eval.score", {predicted, expected, metrics});
+  const scores = b.scores || {};
+  const el = document.getElementById("scores");
+  el.innerHTML = Object.entries(scores).map(([k, v]) =>
+    `<div class="score"><div class="n">${(v * 100).toFixed(0)}%</div><div class="l">${k}</div></div>`
+  ).join("");
+};
+document.getElementById("run-golden").onclick = async () => {
+  const name = document.getElementById("golden").value;
+  const b = await call("eval.golden_run", {set_name: name});
+  document.getElementById("golden-result").textContent = JSON.stringify(b, null, 2);
+};
+document.getElementById("score").click();
+</script>
+</body>
+</html>

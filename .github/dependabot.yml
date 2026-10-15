@@ -1,0 +1,82 @@
+# Dependabot: watch deps across the whole workspace.
+# Rust first, Python workers next, GitHub Actions last.
+
+version: 2
+updates:
+  # Rust workspace
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels: ["deps", "rust"]
+    commit-message:
+      prefix: "cargo"
+      include: scope
+
+  # Python workers
+  - package-ecosystem: pip
+    directory: /workers/arikizu-worker-sdk
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+    commit-message: { prefix: "pip(sdk)" }
+
+  - package-ecosystem: pip
+    directory: /workers/test_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/vision_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/audio_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/docs_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/reasoning_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/timeseries_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/memory_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/guard_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  - package-ecosystem: pip
+    directory: /workers/eval_worker
+    schedule: { interval: weekly }
+    labels: ["deps", "python"]
+
+  # UI (JavaScript)
+  - package-ecosystem: npm
+    directory: /ui
+    schedule: { interval: weekly }
+    labels: ["deps", "js"]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    labels: ["deps", "ci"]

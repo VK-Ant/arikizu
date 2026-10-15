@@ -1,0 +1,25 @@
+[project]
+name = "vision-worker"
+version = "0.0.1"
+description = "Arikizu vision worker; wraps SightRAG for detection and OCR"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+    # Pinned loosely for v0.1 scaffold. SightRAG itself picks the right backend.
+    # "sightrag>=0.1.0",
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+]
+
+[project.scripts]
+vision-worker = "vision_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["vision_worker"]

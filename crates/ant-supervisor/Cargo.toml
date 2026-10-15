@@ -1,0 +1,21 @@
+[package]
+name = "ant-supervisor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ant-common.workspace = true
+ant-ipc.workspace = true
+ant-router.workspace = true
+ant-feedback.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+dashmap.workspace = true
+async-trait.workspace = true

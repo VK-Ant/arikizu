@@ -1,0 +1,31 @@
+# Arikizu reference policy: no outbound network traffic from workers.
+#
+# Applied by the supervisor at worker spawn time. A worker that tries to
+# reach a non-allowlisted host gets a connection refused and the attempt
+# is recorded in the audit log.
+
+name: no-outbound
+version: 1
+
+# allow_hosts: hostnames (or IP CIDRs) a worker is permitted to reach.
+# An empty list means no outbound at all.
+allow_hosts:
+  # Local Ollama server. Reasoning worker talks to this; everyone else is blocked.
+  - 127.0.0.1:11434
+  - localhost:11434
+
+# allow_capabilities: capabilities that may make a request even when the
+# worker's blanket policy is "deny". Scoped by name.
+allow_capabilities:
+  - reasoning.summarize
+  - reasoning.answer
+
+# log: how violations are recorded.
+log:
+  level: warn
+  include_payload: false   # payloads can contain user data; off by default
+  sink: audit              # audit | stderr | both
+
+# enforcement: `block` (default) refuses the request; `warn` lets it through
+# and logs; `off` disables the policy entirely (use only in dev).
+enforcement: block

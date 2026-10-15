@@ -1,0 +1,12 @@
+# Default: Venkatkumar reviews everything until the project has more
+# collaborators.
+
+* @VK-Ant
+
+# Security-sensitive paths require explicit review.
+/SECURITY.md                  @VK-Ant
+/.github/workflows/           @VK-Ant
+/packaging/                   @VK-Ant
+/policies/                    @VK-Ant
+/scripts/install-runtime.sh   @VK-Ant
+/scripts/download-default-models.sh @VK-Ant

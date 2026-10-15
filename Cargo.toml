@@ -1,0 +1,77 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ant-common",
+    "crates/ant-ipc",
+    "crates/ant-router",
+    "crates/ant-supervisor",
+    "crates/ant-models",
+    "crates/ant-devices",
+    "crates/ant-http",
+    "crates/ant-feedback",
+    "crates/ant-cli",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Venkatkumar Rajan"]
+repository = "https://github.com/VK-Ant/arikizu"
+rust-version = "1.75"
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rmp-serde = "1.3"
+rmpv = "1.3"
+toml = "0.8"
+serde_yaml = "0.9"
+clap = { version = "4.5", features = ["derive", "env"] }
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+axum = { version = "0.7", features = ["macros", "ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+hyper = "1.4"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "6.1"
+once_cell = "1.20"
+async-trait = "0.1"
+include_dir = "0.7"
+futures = "0.3"
+bytes = "1.7"
+
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+
+# Internal workspace crates
+ant-common = { path = "crates/ant-common" }
+ant-ipc = { path = "crates/ant-ipc" }
+ant-router = { path = "crates/ant-router" }
+ant-supervisor = { path = "crates/ant-supervisor" }
+ant-models = { path = "crates/ant-models" }
+ant-devices = { path = "crates/ant-devices" }
+ant-http = { path = "crates/ant-http" }
+ant-feedback = { path = "crates/ant-feedback" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.test]
+opt-level = 1

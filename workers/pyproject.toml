@@ -1,0 +1,29 @@
+[project]
+name = "arikizu-workers"
+version = "0.0.1"
+description = "Arikizu OS Python workers workspace"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = [
+    "arikizu-worker-sdk",
+    "test_worker",
+    "vision_worker",
+    "audio_worker",
+    "docs_worker",
+    "reasoning_worker",
+    "timeseries_worker",
+    "memory_worker",
+    "guard_worker",
+    "eval_worker",
+]
+
+[tool.uv.sources]
+# Internal workspace deps resolve via workspace
+arikizu-worker-sdk = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]

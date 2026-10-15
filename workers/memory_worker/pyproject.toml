@@ -1,0 +1,22 @@
+[project]
+name = "memory-worker"
+version = "0.0.1"
+description = "Arikizu memory worker; wraps adaptive-intelligence for recall, update, reward"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+    # "adaptive-intelligence>=4.0.8",
+]
+
+[project.scripts]
+memory-worker = "memory_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["memory_worker"]

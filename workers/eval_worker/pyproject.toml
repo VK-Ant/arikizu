@@ -1,0 +1,22 @@
+[project]
+name = "eval-worker"
+version = "0.0.1"
+description = "Arikizu eval worker; wraps LLMEvalKit for score, compare, golden_run"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+    # "llmevalkit>=0.1.0",
+]
+
+[project.scripts]
+eval-worker = "eval_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["eval_worker"]

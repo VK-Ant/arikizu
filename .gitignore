@@ -1,0 +1,45 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.uv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+pnpm-debug.log*
+
+# UI build output
+/ui/.svelte-kit
+/ui/build
+
+# Models and golden data (large; pulled on first run)
+/models/*
+!/models/.gitkeep
+/golden/*
+!/golden/.gitkeep
+
+# Local sockets, logs, caches
+/tmp/
+*.log
+*.sock
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# dist artifacts
+/dist/

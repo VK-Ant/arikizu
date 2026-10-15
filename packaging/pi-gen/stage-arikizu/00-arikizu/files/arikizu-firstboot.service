@@ -1,0 +1,13 @@
+[Unit]
+Description=Arikizu first-boot setup
+Before=arikizu.service
+ConditionPathExists=!/var/lib/arikizu/.firstboot-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/arikizu/firstboot.sh
+ExecStartPost=/bin/touch /var/lib/arikizu/.firstboot-done
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Guard</title>
+  <style>
+    :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e5e5e2; --pass:#2d8a4e; --fail:#b84040;
+            --sans: -apple-system, system-ui, Roboto, sans-serif;
+            --mono: ui-monospace, Menlo, Consolas, monospace; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#15150f; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a; --card:#1f1f18; --border:#2a2a22; color-scheme: dark; }
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.6}
+    header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card); }
+    main { padding:24px; max-width:1100px; margin:0 auto; }
+    .cols { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px; }
+    @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+    .box { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:16px; }
+    .box h3 { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:0 0 10px; }
+    textarea {
+      font:inherit; width:100%; min-height:180px; background:var(--bg); color:var(--fg);
+      border:1px solid var(--border); border-radius:4px; padding:10px; resize:vertical;
+      font-family:var(--mono); font-size:13px;
+    }
+    button { font:inherit; background:var(--accent); color:#fff; border:none; border-radius:4px;
+             padding:8px 16px; cursor:pointer; }
+    .highlighted { white-space:pre-wrap; word-wrap:break-word; font-family:var(--mono); font-size:13px;
+                   padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:4px; min-height:180px; }
+    .pii { background: color-mix(in srgb, var(--fail) 25%, transparent); border-bottom:2px solid var(--fail);
+           padding:0 2px; border-radius:2px; }
+    .pii-email  { background: color-mix(in srgb, #e74c3c 25%, transparent); border-color: #e74c3c; }
+    .pii-phone  { background: color-mix(in srgb, #e67e22 25%, transparent); border-color: #e67e22; }
+    .pii-aadhaar{ background: color-mix(in srgb, #9b59b6 25%, transparent); border-color: #9b59b6; }
+    .findings { margin-top:12px; }
+    .finding-chip {
+      display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:10px;
+      font-family:var(--mono); font-size:11px;
+    }
+    .fc-email  { background:#e74c3c22; color:#e74c3c; border:1px solid #e74c3c; }
+    .fc-phone  { background:#e67e2222; color:#e67e22; border:1px solid #e67e22; }
+    .fc-aadhaar{ background:#9b59b622; color:#9b59b6; border:1px solid #9b59b6; }
+    .meta { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:8px; }
+    .ok-bar  { background: color-mix(in srgb, var(--pass) 20%, transparent); color: var(--pass);
+               padding:6px 10px; border-radius:3px; font-family:var(--mono); font-size:12px; margin-top:12px; }
+    .warn-bar{ background: color-mix(in srgb, var(--fail) 20%, transparent); color: var(--fail);
+               padding:6px 10px; border-radius:3px; font-family:var(--mono); font-size:12px; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <header><h1 style="margin:0;font-size:20px">Arikizu Guard</h1></header>
+  <main>
+    <div class="box">
+      <h3>Input</h3>
+      <textarea id="text">Email me at venkatkumarr.vk99@gmail.com or call +91 9876543210.
+Operator aadhaar 1234 5678 9012 is on site.
+This line has nothing sensitive — all good.</textarea>
+      <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
+        <button id="run">Scan + Redact</button>
+        <label style="color:var(--muted); font-size: 13px">replacement:</label>
+        <input id="replacement" type="text" value="[REDACTED]"
+               style="font:inherit; background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:5px 8px;">
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="box">
+        <h3>Highlighted (scan result)</h3>
+        <div class="highlighted" id="highlighted"></div>
+        <div class="findings" id="findings"></div>
+      </div>
+      <div class="box">
+        <h3>Redacted preview</h3>
+        <div class="highlighted" id="redacted"></div>
+        <div id="severity"></div>
+      </div>
+    </div>
+  </main>
+
+<script>
+"use strict";
+
+function esc(s) {
+  return s.replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+
+function render(text, findings) {
+  const out = document.getElementById("highlighted");
+  if (!findings || !findings.length) { out.textContent = text; return; }
+  // Sort by span start; the span is [start, end].
+  const sorted = findings.slice().sort((a, b) => a.span[0] - b.span[0]);
+  let html = ""; let cursor = 0;
+  for (const f of sorted) {
+    const [s, e] = f.span;
+    html += esc(text.slice(cursor, s));
+    html += `<span class="pii pii-${f.kind}" title="${f.kind}">${esc(text.slice(s, e))}</span>`;
+    cursor = e;
+  }
+  html += esc(text.slice(cursor));
+  out.innerHTML = html;
+}
+
+function renderFindings(findings) {
+  const el = document.getElementById("findings");
+  if (!findings || !findings.length) { el.innerHTML = "<span class='meta'>no PII detected</span>"; return; }
+  const counts = {};
+  for (const f of findings) counts[f.kind] = (counts[f.kind] || 0) + 1;
+  el.innerHTML = Object.entries(counts).map(([k, n]) =>
+    `<span class="finding-chip fc-${k}">${k} × ${n}</span>`).join("");
+}
+
+document.getElementById("run").onclick = async () => {
+  const text = document.getElementById("text").value;
+  const replacement = document.getElementById("replacement").value;
+
+  const scanR = await fetch("/api/v1/call/guard/scan", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { text } }),
+  }).then(r => r.json());
+
+  render(text, scanR.findings);
+  renderFindings(scanR.findings);
+
+  const sevEl = document.getElementById("severity");
+  if ((scanR.findings || []).length === 0) {
+    sevEl.innerHTML = `<div class="ok-bar">severity: ok — no PII found</div>`;
+  } else {
+    sevEl.innerHTML = `<div class="warn-bar">severity: ${scanR.severity} — ${scanR.findings.length} finding(s)</div>`;
+  }
+
+  const redR = await fetch("/api/v1/call/guard/redact", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { text, replacement } }),
+  }).then(r => r.json());
+  document.getElementById("redacted").textContent = redR.redacted || text;
+};
+
+document.getElementById("run").click();
+</script>
+</body>
+</html>

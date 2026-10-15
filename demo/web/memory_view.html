@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+<title>Arikizu Memory</title>
+<style>
+  :root{--bg:#fafaf7;--fg:#1a1a1a;--muted:#6b6b6b;--accent:#c75c2a;--card:#fff;--border:#e5e5e2;--pass:#2d8a4e;
+        --sans:-apple-system,system-ui,Roboto,sans-serif;--mono:ui-monospace,Menlo,monospace;}
+  @media (prefers-color-scheme: dark){:root{--bg:#15150f;--fg:#f0f0ec;--muted:#9b9b96;--accent:#e07a4a;--card:#1f1f18;--border:#2a2a22;color-scheme:dark;}}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{padding:16px 24px;border-bottom:1px solid var(--border);background:var(--card)}
+  main{padding:24px;max-width:1100px;margin:0 auto}
+  .box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px;margin-top:16px}
+  input,textarea,button{font:inherit;border-radius:4px}
+  input,textarea{background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:5px 8px}
+  textarea{font-family:var(--mono);min-height:60px;width:100%;padding:8px}
+  button{background:var(--accent);color:#fff;border:none;padding:6px 14px;cursor:pointer}
+  .items{margin-top:10px}
+  .item{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 12px;margin:6px 0;font-family:var(--mono);font-size:12px}
+  .meta{color:var(--muted);font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<header><h1 style="margin:0;font-size:20px">Arikizu Memory</h1>
+<div class="meta">Round-trip works in v0.1. State is in RAM only — resets on worker restart.</div></header>
+<main>
+  <div class="box">
+    <label>session_id:</label>
+    <input id="sid" value="demo-session" style="min-width:200px">
+  </div>
+  <div class="box">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Update</h3>
+    <textarea id="item">{"q": "first", "ts": 1}</textarea>
+    <button id="add" style="margin-top:8px">memory.update</button>
+  </div>
+  <div class="box">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Recall</h3>
+    <input id="query" value="" placeholder="optional query">
+    <input id="k" type="number" value="5" style="width:60px; margin-left:8px">
+    <button id="rec" style="margin-left:8px">memory.recall</button>
+    <div class="items" id="items"></div>
+  </div>
+  <div class="box">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Reward</h3>
+    <input id="qid" placeholder="query_id" value="demo-q" style="min-width:140px">
+    <label style="margin-left:8px">score:</label>
+    <input id="score" type="number" value="0.9" step="0.1" style="width:70px">
+    <button id="rew" style="margin-left:8px">memory.reward</button>
+    <div class="meta" id="reward-result" style="margin-top:8px"></div>
+  </div>
+</main>
+<script>
+async function call(cap, payload) {
+  const [d, op] = cap.split(".");
+  const r = await fetch(`/api/v1/call/${d}/${op}`, {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({payload})
+  });
+  return r.json();
+}
+document.getElementById("add").onclick = async () => {
+  const sid = document.getElementById("sid").value;
+  let item = {};
+  try { item = JSON.parse(document.getElementById("item").value); }
+  catch(e) { alert("invalid JSON: " + e.message); return; }
+  const b = await call("memory.update", {session_id: sid, item});
+  alert(`updated — count: ${b.count}`);
+};
+document.getElementById("rec").onclick = async () => {
+  const sid = document.getElementById("sid").value;
+  const q = document.getElementById("query").value;
+  const k = parseInt(document.getElementById("k").value, 10);
+  const b = await call("memory.recall", {session_id: sid, query: q, top_k: k});
+  const el = document.getElementById("items");
+  const items = b.items || [];
+  if (items.length === 0) {
+    el.innerHTML = `<div class="meta">no items</div>`;
+  } else {
+    el.innerHTML = items.map(i => `<div class="item">${JSON.stringify(i)}</div>`).join("");
+  }
+};
+document.getElementById("rew").onclick = async () => {
+  const qid = document.getElementById("qid").value;
+  const score = parseFloat(document.getElementById("score").value);
+  const b = await call("memory.reward", {query_id: qid, score});
+  document.getElementById("reward-result").textContent = JSON.stringify(b);
+};
+</script>
+</body>
+</html>

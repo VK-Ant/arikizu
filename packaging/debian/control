@@ -1,0 +1,32 @@
+Source: arikizu
+Section: utils
+Priority: optional
+Maintainer: Venkatkumar Rajan <venkatkumarr.vk99@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/VK-Ant/arikizu
+Vcs-Browser: https://github.com/VK-Ant/arikizu
+Vcs-Git: https://github.com/VK-Ant/arikizu.git
+
+Package: arikizu
+Architecture: arm64 amd64
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ python3 (>= 3.11),
+ python3-venv,
+ adduser,
+ ca-certificates,
+ libasound2
+Recommends:
+ ollama,
+ python3-picamera2,
+ python3-opencv
+Description: Edge-first, offline-first, responsible-AI operating system
+ Arikizu packages a Rust runtime and a set of Python worker processes
+ under one capability API with a browser dashboard and a human-in-the-loop
+ approval queue. One install owns vision, audio, documents, time series,
+ reasoning, memory, policy enforcement, and audit on a single edge device.
+ .
+ The binary is cross-compiled for aarch64 in CI; Python workers ship as
+ pre-built wheels. No build toolchain is installed on the target.

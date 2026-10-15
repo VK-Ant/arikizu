@@ -1,0 +1,21 @@
+[project]
+name = "test-worker"
+version = "0.0.1"
+description = "Arikizu reference worker that proves the IPC path end to end"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+]
+
+[project.scripts]
+test-worker = "test_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["test_worker"]

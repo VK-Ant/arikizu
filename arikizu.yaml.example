@@ -1,0 +1,118 @@
+# Arikizu reference pipeline configuration.
+#
+# Copy to arikizu.yaml and edit. Only `name` is required; everything else
+# falls back to safe defaults.
+
+name: factory-floor-qa
+
+# ---------------------------------------------------------------------------
+# Devices
+# Logical input sources referenced by pipeline stages.
+# ---------------------------------------------------------------------------
+devices:
+  cam_a:
+    type: rtsp
+    url: rtsp://192.168.1.10/stream1
+    fps: 5
+  shopfloor_mic:
+    type: alsa
+    device: hw:1,0
+    sample_rate: 16000
+
+# ---------------------------------------------------------------------------
+# Workers
+# Processes the supervisor should spawn. Omit this block and the supervisor
+# will infer one worker per `worker = "..."` entry in capabilities.toml.
+# ---------------------------------------------------------------------------
+workers:
+  - name: test
+    python: uv
+    module: test_worker
+    args: [run, --package, test-worker, python, -m, test_worker]
+    cwd: ./workers
+  - name: vision
+    python: uv
+    module: vision_worker
+    args: [run, --package, vision-worker, python, -m, vision_worker]
+    cwd: ./workers
+  - name: reasoning
+    python: uv
+    module: reasoning_worker
+    args: [run, --package, reasoning-worker, python, -m, reasoning_worker]
+    cwd: ./workers
+    env:
+      ARIKIZU_REASONING_MODEL: qwen2.5:3b-instruct-q4_K_M
+      ARIKIZU_OLLAMA_ENDPOINT: http://127.0.0.1:11434
+  - name: guard
+    python: uv
+    module: guard_worker
+    args: [run, --package, guard-worker, python, -m, guard_worker]
+    cwd: ./workers
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# Ordered stages. `feedback.approve` turns a stage into a human gate.
+# ---------------------------------------------------------------------------
+pipeline:
+  - name: detect_defects
+    capability: vision.detect
+    inputs:
+      image_path: /tmp/latest.jpg
+      confidence: 0.6
+
+  - name: guard_findings
+    capability: guard.scan
+
+  - name: narrate_defect
+    capability: reasoning.summarize
+    inputs:
+      template: "Describe the detected defects to a non-technical operator:\n{text}"
+      max_tokens: 200
+
+  - name: supervisor_approval
+    capability: feedback.approve
+    approver_role: shift_lead
+
+# ---------------------------------------------------------------------------
+# Reasoning
+# Which local LLM backend to use.
+# ---------------------------------------------------------------------------
+reasoning:
+  provider: ollama
+  model: qwen2.5:3b-instruct-q4_K_M
+  endpoint: http://127.0.0.1:11434
+
+# ---------------------------------------------------------------------------
+# Human-in-the-loop
+# Approval gates, review queue retention, who can approve.
+# ---------------------------------------------------------------------------
+feedback:
+  review_queue:
+    retain_hours: 72
+    max_pending: 500
+  approvers:
+    - shift_lead
+    - plant_manager
+  rate_scale: binary
+  golden_set:
+    dir: ./golden
+    auto_sample_rate: 0.02
+
+# ---------------------------------------------------------------------------
+# Policies
+# ---------------------------------------------------------------------------
+policies:
+  - policies/no-outbound.yaml
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  offline: true
+  http_api: 127.0.0.1:7000
+  socket_dir: /tmp/arikizu
+  log_level: info
+  db_path: ./arikizu.db
+  telemetry:
+    local_only: true
+    retain_days: 30

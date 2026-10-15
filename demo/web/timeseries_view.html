@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Timeseries</title>
+  <style>
+    :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e5e5e2; --pass:#2d8a4e; --fail:#b84040;
+            --mono: ui-monospace, Menlo, Consolas, monospace;
+            --sans: -apple-system, system-ui, Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#15150f; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a; --card:#1f1f18; --border:#2a2a22; color-scheme: dark; }
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+    header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card); }
+    main { padding:24px; max-width:1100px; margin:0 auto; }
+    .ctl { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:12px 18px;
+           display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    input, select, button { font:inherit; border-radius:4px; }
+    input { background:var(--bg); color:var(--fg); border:1px solid var(--border); padding:5px 8px; }
+    button { background:var(--accent); color:#fff; border:none; padding:6px 14px; cursor:pointer; }
+    button.sec { background:var(--card); color:var(--fg); border:1px solid var(--border); }
+    .viz { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:16px; margin-top:16px; }
+    canvas { display:block; width:100%; height:300px; background:var(--bg); border-radius:4px; }
+    .legend { margin-top:8px; font-size:12px; color:var(--muted); font-family:var(--mono); }
+    .swatch { display:inline-block; width:10px; height:10px; margin-right:4px; vertical-align:middle; border-radius:2px; }
+    .meta { color:var(--muted); margin-top:8px; font-size:12px; font-family:var(--mono); }
+    .tag { display:inline-block; padding:2px 8px; border-radius:3px; font-family:var(--mono); font-size:11px;
+           background: color-mix(in srgb, var(--pass) 20%, transparent); color: var(--pass); }
+    .tag.fail { background: color-mix(in srgb, var(--fail) 20%, transparent); color: var(--fail); }
+  </style>
+</head>
+<body>
+  <header><h1 style="margin:0;font-size:20px">Arikizu Timeseries</h1></header>
+  <main>
+    <div class="ctl">
+      <label>points:</label>
+      <input id="n" type="number" value="120" style="width:70px">
+      <label>period:</label>
+      <input id="period" type="number" value="30" style="width:60px">
+      <label>amplitude:</label>
+      <input id="amp" type="number" value="10" style="width:60px">
+      <label>anomaly indices (comma):</label>
+      <input id="anoms" type="text" value="42,72,95" style="min-width:140px">
+      <button id="gen">Generate</button>
+      <button id="forecast" class="sec">Forecast</button>
+      <button id="detect" class="sec">Detect anomaly</button>
+    </div>
+
+    <div class="viz">
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background: var(--accent)"></span>series</span>
+        <span style="margin-left:16px"><span class="swatch" style="background: #3498db"></span>forecast</span>
+        <span style="margin-left:16px"><span class="swatch" style="background: var(--fail)"></span>anomaly</span>
+      </div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </main>
+
+<script>
+"use strict";
+
+let series = [];
+let forecast = [];
+let anomalies = [];
+
+function makeSine() {
+  const n = parseInt(document.getElementById("n").value, 10);
+  const period = parseFloat(document.getElementById("period").value);
+  const amp = parseFloat(document.getElementById("amp").value);
+  const anoms = document.getElementById("anoms").value.split(",")
+    .map(s => parseInt(s.trim(), 10)).filter(x => !isNaN(x));
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    arr.push(50 + amp * Math.sin(2 * Math.PI * i / period));
+  }
+  for (const idx of anoms) {
+    if (idx >= 0 && idx < n) arr[idx] = 50 + amp * 20 + Math.random() * 50;
+  }
+  series = arr;
+  forecast = []; anomalies = [];
+  draw();
+}
+
+function draw() {
+  const canvas = document.getElementById("chart");
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const all = series.concat(forecast);
+  if (!all.length) return;
+  const minV = Math.min(...all);
+  const maxV = Math.max(...all);
+  const pad = (maxV - minV) * 0.1 || 1;
+  const low = minV - pad, high = maxV + pad;
+  const nTot = series.length + forecast.length;
+  const dx = W / Math.max(nTot - 1, 1);
+  const yOf = v => H - ((v - low) / (high - low)) * (H - 20) - 10;
+
+  // Grid lines
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--border") || "#ccc";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = (H / 4) * i;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Series line
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--accent") || "#c75c2a";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  series.forEach((v, i) => {
+    const x = i * dx, y = yOf(v);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Forecast line (dashed)
+  if (forecast.length) {
+    ctx.strokeStyle = "#3498db";
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    const first = series[series.length - 1];
+    if (first !== undefined) ctx.moveTo((series.length - 1) * dx, yOf(first));
+    forecast.forEach((v, i) => {
+      ctx.lineTo((series.length + i) * dx, yOf(v));
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Anomaly markers
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--fail") || "#b84040";
+  for (const a of anomalies) {
+    const i = a.index ?? -1;
+    if (i < 0 || i >= series.length) continue;
+    const x = i * dx, y = yOf(series[i]);
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+document.getElementById("gen").onclick = makeSine;
+
+document.getElementById("forecast").onclick = async () => {
+  if (!series.length) return;
+  const r = await fetch("/api/v1/call/timeseries/forecast", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { series, horizon: 24 } }),
+  });
+  const b = await r.json();
+  forecast = b.forecast || [];
+  document.getElementById("meta").innerHTML =
+    `<span class="tag">PASS</span> method: ${b.method}, horizon: ${b.horizon}, forecast points: ${forecast.length}`;
+  draw();
+};
+
+document.getElementById("detect").onclick = async () => {
+  if (!series.length) return;
+  const r = await fetch("/api/v1/call/timeseries/detect_anomaly", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { series, threshold: 3.0 } }),
+  });
+  const b = await r.json();
+  anomalies = b.anomalies || [];
+  document.getElementById("meta").innerHTML =
+    `<span class="tag">PASS</span> method: ${b.method}, anomalies: ${anomalies.length} (backend: ${b.backend || "fallback"})`;
+  draw();
+};
+
+// Draw initial
+makeSine();
+window.addEventListener("resize", draw);
+</script>
+</body>
+</html>

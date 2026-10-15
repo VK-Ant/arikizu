@@ -1,0 +1,25 @@
+[project]
+name = "timeseries-worker"
+version = "0.0.1"
+description = "Arikizu time-series worker; wraps WavqWise for forecast, anomaly"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+    "numpy>=1.26.0",
+    "scikit-learn>=1.3.0",
+    "joblib>=1.3.0",
+    # "wavqwise>=0.1.0",
+]
+
+[project.scripts]
+timeseries-worker = "timeseries_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["timeseries_worker"]

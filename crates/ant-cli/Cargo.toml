@@ -1,0 +1,30 @@
+[package]
+name = "ant-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "arikizu"
+path = "src/main.rs"
+
+[dependencies]
+ant-common.workspace = true
+ant-ipc.workspace = true
+ant-router.workspace = true
+ant-supervisor.workspace = true
+ant-models.workspace = true
+ant-devices.workspace = true
+ant-feedback.workspace = true
+ant-http.workspace = true
+tokio.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+toml.workspace = true
+serde_yaml.workspace = true
+uuid.workspace = true
+reqwest = { workspace = true }

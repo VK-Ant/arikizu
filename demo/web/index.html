@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu — localhost</title>
+  <style>
+    :root {
+      --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
+      --card: #ffffff; --border: #e5e5e2;
+      --pass: #2d8a4e; --wait: #c89520; --fail: #b84040;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme='light']) {
+        --bg: #15150f; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
+        --card: #1f1f18; --border: #2a2a22; color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg);
+                 font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+    header { padding: 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+    header h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+    .tag { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .status { margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .dot.ok { background: var(--pass); } .dot.bad { background: var(--fail); }
+
+    main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+         margin: 24px 0 12px; font-weight: 600; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 18px 20px; text-decoration: none; color: inherit; display: block;
+      transition: border-color 0.15s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { font-size: 15px; margin: 0 0 4px; }
+    .card p { color: var(--muted); margin: 0 0 8px; font-size: 13px; }
+    .card .badge {
+      display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px;
+      background: color-mix(in srgb, var(--pass) 20%, transparent); color: var(--pass);
+      font-family: var(--mono);
+    }
+    .card .badge.wait { background: color-mix(in srgb, var(--wait) 20%, transparent); color: var(--wait); }
+
+    .pill { display: inline-block; font-family: var(--mono); font-size: 11px;
+            padding: 1px 6px; border-radius: 3px; background: var(--bg); border: 1px solid var(--border); margin-right: 4px; }
+    .smoke-btn {
+      font: inherit; background: var(--accent); color: white; border: none; border-radius: 4px;
+      padding: 8px 16px; cursor: pointer; font-size: 14px;
+    }
+    .smoke-wrap { margin-top: 16px; }
+    .smoke-row { display: grid; grid-template-columns: 90px 1fr 60px; gap: 10px;
+                 padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center; }
+    .smoke-cap { font-family: var(--mono); }
+    .smoke-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    .status-tag {
+      display: inline-block; font-weight: 600; padding: 1px 6px; border-radius: 3px; font-size: 11px;
+    }
+    .status-tag.PASS { background: color-mix(in srgb, var(--pass) 20%, transparent); color: var(--pass); }
+    .status-tag.WAIT { background: color-mix(in srgb, var(--wait) 20%, transparent); color: var(--wait); }
+    .status-tag.FAIL { background: color-mix(in srgb, var(--fail) 20%, transparent); color: var(--fail); }
+    .status-tag.SKIP { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header style="display:flex; align-items:center; gap:16px;">
+    <img src="/demo/logo.png" alt="Arikizu" style="width:48px; height:48px; object-fit:contain;">
+    <div style="flex:1;">
+      <h1 style="margin:0;">Arikizu localhost</h1>
+      <div class="tag">Developer sandbox. For the operator view go to <a href="/" style="color:var(--accent)">home</a>. Every worker has its own visual view below.</div>
+    </div>
+    <div class="status">
+      <span><span id="runtime-dot" class="dot bad"></span><span id="runtime-text">checking...</span></span>
+      <span id="pipeline"></span>
+      <span id="workers"></span>
+      <span id="caps"></span>
+      <span id="audit"></span>
+    </div>
+  </header>
+
+  <main>
+    <h2>Visual views per worker</h2>
+    <div class="grid" id="views">
+      <a class="card" href="/demo/vision_live.html">
+        <h3>Vision live <span class="badge">visual</span></h3>
+        <p>Annotated frames in real time with canvas overlay. Bounding boxes, class labels, FPS counter.</p>
+        <span class="pill">vision.detect</span>
+      </a>
+      <a class="card" href="/demo/vision_search.html">
+        <h3>Vision search <span class="badge">visual</span></h3>
+        <p>Query historical detections from the audit log. Filter by class, min score, time window.</p>
+        <span class="pill">audit log</span>
+      </a>
+      <a class="card" href="/demo/audio_view.html">
+        <h3>Audio <span class="badge wait">partial</span></h3>
+        <p>Upload or point at a WAV. Waveform + VAD segments + transcript below.</p>
+        <span class="pill">audio.transcribe</span><span class="pill">audio.vad</span>
+      </a>
+      <a class="card" href="/demo/timeseries_view.html">
+        <h3>Timeseries <span class="badge">visual</span></h3>
+        <p>Line chart of your series. Anomaly markers from Isolation Forest. Forecast overlay.</p>
+        <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
+      </a>
+      <a class="card" href="/demo/guard_view.html">
+        <h3>Guard <span class="badge">visual</span></h3>
+        <p>Paste text. Email, phone, Aadhaar highlighted inline. Redacted preview on the right.</p>
+        <span class="pill">guard.scan</span><span class="pill">guard.redact</span>
+      </a>
+      <a class="card" href="/demo/reasoning_chat.html">
+        <h3>Reasoning chat <span class="badge wait">needs Ollama</span></h3>
+        <p>Chat-style interface for reasoning.answer and reasoning.summarize. Streams responses.</p>
+        <span class="pill">reasoning.answer</span><span class="pill">reasoning.summarize</span>
+      </a>
+      <a class="card" href="/demo/docs_view.html">
+        <h3>Docs <span class="badge wait">partial</span></h3>
+        <p>Point at a file. Schema editor. Extracted fields in a form. Tables underneath.</p>
+        <span class="pill">docs.extract</span><span class="pill">docs.table</span>
+      </a>
+      <a class="card" href="/demo/eval_view.html">
+        <h3>Eval <span class="badge">visual</span></h3>
+        <p>Side-by-side predicted vs expected. Metric scores as cards. Golden-set run button.</p>
+        <span class="pill">eval.score</span><span class="pill">eval.compare</span>
+      </a>
+      <a class="card" href="/demo/memory_view.html">
+        <h3>Memory <span class="badge">visual</span></h3>
+        <p>Browse sessions. Last K items. Reward submit. In-process state in v0.1.</p>
+        <span class="pill">memory.recall</span><span class="pill">memory.update</span>
+      </a>
+    </div>
+
+    <h2>Raw sandbox — every capability, JSON input/output</h2>
+    <div class="grid">
+      <a class="card" href="/demo/raw.html">
+        <h3>JSON sandbox</h3>
+        <p>One tab per worker. Fill payload, hit Call. Shows PASS / WAIT / FAIL + timing + body.</p>
+      </a>
+      <a class="card" href="/api/v1/runtime" target="_blank">
+        <h3>Runtime JSON</h3>
+        <p>Device + per-worker: available runtimes, picked backend, models on disk, model loaded.</p>
+      </a>
+      <a class="card" href="/api/v1/audit?limit=50" target="_blank">
+        <h3>Audit log JSON</h3>
+        <p>Last 50 events. Add <code>?kind=feedback.</code> or <code>?kind=pipeline.</code> to filter.</p>
+      </a>
+    </div>
+
+    <h2>One-click smoke test</h2>
+    <button class="smoke-btn" id="smoke-run">Run smoke test</button>
+    <div class="smoke-wrap" id="smoke-results"></div>
+  </main>
+
+<script>
+"use strict";
+
+const API = "/api/v1";
+
+async function pollStatus() {
+  try {
+    const r = await fetch(`${API}/status`);
+    const s = await r.json();
+    document.getElementById("runtime-dot").className = "dot ok";
+    document.getElementById("runtime-text").textContent = `connected: ${s.runtime} v${s.version}`;
+    document.getElementById("pipeline").textContent = `pipeline: ${s.pipeline}`;
+    document.getElementById("workers").textContent = `workers: ${s.workers.length}`;
+    document.getElementById("caps").textContent = `capabilities: ${s.capability_count}`;
+    document.getElementById("audit").textContent = `audit rows: ${s.audit_rows}`;
+  } catch (e) {
+    document.getElementById("runtime-dot").className = "dot bad";
+    document.getElementById("runtime-text").textContent = "runtime unreachable";
+  }
+}
+
+// Smoke test moved from the raw page so the hub is self-contained.
+const ALL = [
+  ["test.echo", { message: "hello" }],
+  ["test.add", { a: 2, b: 40 }],
+  ["vision.detect", { image_path: "demo/fixtures/sample.png", confidence: 0.5 }],
+  ["vision.backends", {}],
+  ["audio.transcribe", { audio_path: "demo/fixtures/sample.wav", lang: "en" }],
+  ["audio.vad", { audio_path: "demo/fixtures/sample.wav", threshold: 0.5 }],
+  ["docs.extract", { file_path: "demo/fixtures/sample.txt", schema: {} }],
+  ["timeseries.forecast", { series: [1, 1.1, 1.2, 1.3], horizon: 4 }],
+  ["timeseries.detect_anomaly", { series: [1, 1.1, 1.2, 10, 1.3], threshold: 3.0 }],
+  ["memory.update", { session_id: "demo", item: { q: "ping" } }],
+  ["memory.recall", { session_id: "demo", query: "", top_k: 1 }],
+  ["guard.scan", { text: "Email vk@example.com" }],
+  ["guard.redact", { text: "Email vk@example.com", replacement: "[X]" }],
+  ["eval.score", { predicted: "ok", expected: "ok", metrics: ["exact"] }],
+  ["eval.compare", { a: "x", b: "x" }],
+  ["reasoning.answer", { question: "2+2?", context: "math", max_tokens: 20 }],
+];
+
+async function callOne(cap, payload) {
+  const [d, op] = cap.split(".");
+  const t = performance.now();
+  try {
+    const r = await fetch(`${API}/call/${d}/${op}`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payload }),
+    });
+    const ms = Math.round(performance.now() - t);
+    const txt = await r.text();
+    let body;
+    try { body = JSON.parse(txt); } catch { body = txt; }
+    if (r.status === 503 && String(body).includes("not running")) return { status: "SKIP", body, ms };
+    if (r.status === 404) return { status: "SKIP", body: "not registered", ms };
+    if (!r.ok) return { status: "FAIL", body, ms };
+    if (typeof body === "object" && body) {
+      if (body.error) return { status: "FAIL", body, ms };
+      if (body.note && String(body.note).toLowerCase().includes("placeholder")) return { status: "WAIT", body, ms };
+    }
+    return { status: "PASS", body, ms };
+  } catch (e) {
+    return { status: "FAIL", body: String(e), ms: Math.round(performance.now() - t) };
+  }
+}
+
+document.getElementById("smoke-run").onclick = async () => {
+  const el = document.getElementById("smoke-results");
+  el.innerHTML = `<div class="smoke-row" style="color: var(--muted); font-weight: 500"><div>status</div><div>capability</div><div style="text-align: right">ms</div></div>`;
+  const counts = { PASS: 0, WAIT: 0, FAIL: 0, SKIP: 0 };
+  for (const [cap, payload] of ALL) {
+    const { status, body, ms } = await callOne(cap, payload);
+    counts[status]++;
+    const detail = typeof body === "object" && body
+      ? (body.note || body.error || JSON.stringify(body).slice(0, 100))
+      : String(body).slice(0, 100);
+    el.innerHTML += `
+      <div class="smoke-row">
+        <div><span class="status-tag ${status}">${status}</span></div>
+        <div class="smoke-cap">${cap}<br><span class="smoke-detail">${detail}</span></div>
+        <div style="text-align: right; color: var(--muted)">${ms}</div>
+      </div>`;
+  }
+  el.innerHTML += `
+    <div style="margin-top: 12px">
+      <b style="color: var(--pass)">${counts.PASS}</b> live &nbsp;·&nbsp;
+      <b style="color: var(--wait)">${counts.WAIT}</b> placeholder &nbsp;·&nbsp;
+      <b style="color: var(--fail)">${counts.FAIL}</b> failing &nbsp;·&nbsp;
+      <b style="color: var(--muted)">${counts.SKIP}</b> skipped
+    </div>`;
+};
+
+pollStatus();
+setInterval(pollStatus, 3000);
+</script>
+</body>
+</html>

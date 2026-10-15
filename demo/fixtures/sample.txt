@@ -1,0 +1,14 @@
+Arikizu Factory Floor Report
+============================
+
+Date: 2026-10-12
+Shift: morning
+Line: 3
+
+Defects observed:
+- Three missing bolts on housing A at 09:14
+- One hairline crack on housing B at 10:02
+- Camera 2 lost signal between 10:33 and 10:35
+
+Operator: VK (vk@example.com, phone +91 9876543210)
+Approved by: shift_lead

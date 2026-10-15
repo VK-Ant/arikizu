@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Audio</title>
+  <style>
+    :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e5e5e2; --pass:#2d8a4e; --wait:#c89520;
+            --mono: ui-monospace, Menlo, Consolas, monospace;
+            --sans: -apple-system, system-ui, Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#15150f; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a; --card:#1f1f18; --border:#2a2a22; color-scheme: dark; }
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+    header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card); }
+    main { padding:24px; max-width:1100px; margin:0 auto; }
+    .ctl { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:12px 18px;
+           display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    input, button { font:inherit; border-radius:4px; }
+    input[type="text"], input[type="file"] { background:var(--bg); color:var(--fg); border:1px solid var(--border); padding:5px 8px; min-width:240px; }
+    button { background:var(--accent); color:#fff; border:none; padding:6px 14px; cursor:pointer; }
+    button.sec { background:var(--card); color:var(--fg); border:1px solid var(--border); }
+    .viz { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:16px; margin-top:16px; }
+    canvas { display:block; width:100%; height:140px; background: var(--bg); border-radius: 4px; }
+    .meta { color:var(--muted); font-family:var(--mono); font-size:12px; margin-top:10px; }
+    .seg { position:absolute; top:0; bottom:0; background: color-mix(in srgb, var(--pass) 25%, transparent); border-left: 1px solid var(--pass); border-right: 1px solid var(--pass); }
+    .seg-wrap { position:relative; margin-top: 8px; }
+    .transcript { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:16px; margin-top:16px; }
+    .transcript h3 { margin:0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:3px; font-family:var(--mono); font-size:11px;
+           background: color-mix(in srgb, var(--pass) 20%, transparent); color: var(--pass); }
+    .tag.wait { background: color-mix(in srgb, var(--wait) 20%, transparent); color: var(--wait); }
+  </style>
+</head>
+<body>
+  <header><h1 style="margin:0;font-size:20px">Arikizu Audio</h1></header>
+  <main>
+    <div class="ctl">
+      <label>audio path (server-side):</label>
+      <input id="path" type="text" value="demo/fixtures/sample.wav">
+      <label>serve URL:</label>
+      <input id="url" type="text" value="/demo/fixtures/sample.wav" style="min-width:180px">
+      <label>lang:</label>
+      <input id="lang" type="text" value="en" style="min-width:60px">
+      <button id="run">Run VAD + transcribe</button>
+      <button id="play" class="sec">Play</button>
+    </div>
+
+    <div class="viz">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>Waveform</strong>
+        <span class="meta" id="wave-meta">no audio loaded</span>
+      </div>
+      <canvas id="wave"></canvas>
+      <div class="seg-wrap" id="segs" style="height: 24px"></div>
+    </div>
+
+    <div class="transcript">
+      <h3>audio.vad</h3>
+      <div id="vad-result"><span class="meta">not run yet</span></div>
+      <h3 style="margin-top:16px">audio.transcribe</h3>
+      <div id="transcript-result"><span class="meta">not run yet</span></div>
+    </div>
+  </main>
+
+<script>
+"use strict";
+
+let audioCtx = null;
+let audioBuffer = null;
+let audioEl = null;
+
+async function loadAndDrawAudio(url) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const r = await fetch(url);
+  const arr = await r.arrayBuffer();
+  audioBuffer = await audioCtx.decodeAudioData(arr);
+  drawWaveform(audioBuffer);
+  if (!audioEl) {
+    audioEl = new Audio();
+  }
+  audioEl.src = url;
+  document.getElementById("wave-meta").textContent =
+    `${audioBuffer.duration.toFixed(2)}s · ${audioBuffer.sampleRate} Hz · ${audioBuffer.numberOfChannels}ch`;
+}
+
+function drawWaveform(buf) {
+  const canvas = document.getElementById("wave");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  const data = buf.getChannelData(0);
+  const step = Math.ceil(data.length / w);
+  const amp = h / 2;
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--muted") || "#999";
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--accent") || "#c75c2a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < w; i++) {
+    let min = 1.0, max = -1.0;
+    for (let j = 0; j < step; j++) {
+      const v = data[i * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const yMin = (1 + min) * amp;
+    const yMax = (1 + max) * amp;
+    ctx.moveTo(i + 0.5, yMin);
+    ctx.lineTo(i + 0.5, yMax);
+  }
+  ctx.stroke();
+}
+
+function drawVADSegments(segs, duration) {
+  const wrap = document.getElementById("segs");
+  wrap.innerHTML = "";
+  if (!segs || !segs.length) return;
+  const w = wrap.clientWidth;
+  for (const s of segs) {
+    const start = (s.start ?? s.begin ?? 0) / duration;
+    const end = (s.end ?? s.stop ?? 0) / duration;
+    const div = document.createElement("div");
+    div.className = "seg";
+    div.style.left = (start * 100) + "%";
+    div.style.width = ((end - start) * 100) + "%";
+    wrap.appendChild(div);
+  }
+}
+
+async function run() {
+  const path = document.getElementById("path").value;
+  const url = document.getElementById("url").value;
+  const lang = document.getElementById("lang").value;
+
+  try { await loadAndDrawAudio(url); }
+  catch (e) { console.warn("audio load failed:", e); }
+
+  const vadR = await fetch("/api/v1/call/audio/vad", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { audio_path: path, threshold: 0.5 } }),
+  }).then(r => r.json());
+
+  const vadEl = document.getElementById("vad-result");
+  const segs = vadR.segments || [];
+  if (vadR.note && /placeholder/i.test(vadR.note)) {
+    vadEl.innerHTML = `<span class="tag wait">WAIT</span> ${vadR.note}`;
+  } else {
+    vadEl.innerHTML = `<span class="tag">PASS</span> ${segs.length} speech segments`;
+  }
+  if (audioBuffer) drawVADSegments(segs, audioBuffer.duration);
+
+  const transR = await fetch("/api/v1/call/audio/transcribe", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ payload: { audio_path: path, lang } }),
+  }).then(r => r.json());
+
+  const tEl = document.getElementById("transcript-result");
+  if (transR.note && /placeholder/i.test(transR.note)) {
+    tEl.innerHTML = `<span class="tag wait">WAIT</span> ${transR.note}`;
+  } else {
+    tEl.innerHTML = `<span class="tag">PASS</span> ${(transR.text || "(empty)")}`;
+  }
+}
+
+document.getElementById("run").onclick = run;
+document.getElementById("play").onclick = () => {
+  if (audioEl) audioEl.play();
+};
+</script>
+</body>
+</html>

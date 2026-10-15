@@ -1,0 +1,43 @@
+#!/bin/sh
+# Debian post-install: create arikizu user, state dir, enable the service.
+
+set -e
+
+USER=arikizu
+GROUP=arikizu
+STATE_DIR=/var/lib/arikizu
+
+case "$1" in
+    configure)
+        if ! getent group "$GROUP" >/dev/null 2>&1; then
+            addgroup --system "$GROUP"
+        fi
+        if ! getent passwd "$USER" >/dev/null 2>&1; then
+            adduser --system --home "$STATE_DIR" --no-create-home \
+                    --ingroup "$GROUP" --disabled-password \
+                    --disabled-login --quiet "$USER"
+        fi
+
+        mkdir -p "$STATE_DIR" /etc/arikizu/policies
+        chown -R "$USER:$GROUP" "$STATE_DIR"
+
+        # Default config if the admin has not already placed one.
+        if [ ! -f /etc/arikizu/arikizu.yaml ]; then
+            cp /usr/share/arikizu/arikizu.yaml.default /etc/arikizu/arikizu.yaml
+        fi
+        if [ ! -f /etc/arikizu/capabilities.toml ]; then
+            cp /usr/share/arikizu/capabilities.toml.default /etc/arikizu/capabilities.toml
+        fi
+
+        # Enable + start on fresh installs; leave alone on upgrades.
+        if [ -z "$2" ] && [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            systemctl enable arikizu.service
+            systemctl start arikizu.service || true
+        fi
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+esac
+
+exit 0

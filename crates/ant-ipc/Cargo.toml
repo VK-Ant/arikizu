@@ -1,0 +1,17 @@
+[package]
+name = "ant-ipc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ant-common.workspace = true
+tokio.workspace = true
+rmp-serde.workspace = true
+rmpv.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+bytes.workspace = true

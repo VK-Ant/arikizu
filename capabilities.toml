@@ -1,0 +1,275 @@
+# Arikizu capability registry.
+#
+# Each capability declares its backing worker, timeouts, and priority.
+# Loaded at startup by `arikizu run` and served at /api/v1/capabilities.
+
+# ---------------------------------------------------------------------------
+# test (reference worker; proves IPC path end-to-end)
+# ---------------------------------------------------------------------------
+[test_echo]
+name          = "test.echo"
+worker        = "test"
+input         = { message = "string" }
+output        = "object"
+timeout_ms    = 5000
+priority      = 0
+
+[test_add]
+name          = "test.add"
+worker        = "test"
+input         = { a = "integer", b = "integer" }
+output        = "object"
+timeout_ms    = 5000
+priority      = 0
+
+[test_slow]
+name          = "test.slow"
+worker        = "test"
+input         = { seconds = "number" }
+output        = "object"
+timeout_ms    = 10000
+priority      = -1
+
+# ---------------------------------------------------------------------------
+# vision (SightRAG; Weekend 5)
+# ---------------------------------------------------------------------------
+[vision_detect]
+name          = "vision.detect"
+worker        = "vision"
+input         = { image_path = "string", confidence = "number" }
+output        = "object"
+timeout_ms    = 30000
+emits_events  = ["vision.detected"]
+priority      = 0
+
+[vision_ocr]
+name          = "vision.ocr"
+worker        = "vision"
+input         = { image_path = "string", lang = "string" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 0
+
+[vision_caption]
+name          = "vision.caption"
+worker        = "vision"
+input         = { image_path = "string" }
+output        = "object"
+timeout_ms    = 30000
+priority      = -1
+
+[vision_backends]
+name          = "vision.backends"
+worker        = "vision"
+input         = {}
+output        = "object"
+timeout_ms    = 5000
+priority      = 1
+
+[vision_switch_model]
+name          = "vision.switch_model"
+worker        = "vision"
+input         = { model_path = "string", prefer = "array" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 1
+
+# ---------------------------------------------------------------------------
+# audio (Sonarwise; Weekend 6)
+# ---------------------------------------------------------------------------
+[audio_transcribe]
+name          = "audio.transcribe"
+worker        = "audio"
+input         = { audio_path = "string", lang = "string" }
+output        = "object"
+timeout_ms    = 60000
+priority      = 0
+
+[audio_vad]
+name          = "audio.vad"
+worker        = "audio"
+input         = { audio_path = "string", threshold = "number" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 0
+
+[audio_keyword_spot]
+name          = "audio.keyword_spot"
+worker        = "audio"
+input         = { audio_path = "string", keywords = "array" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 0
+
+# ---------------------------------------------------------------------------
+# docs (DocQWise/Vellex; Weekend 7)
+# ---------------------------------------------------------------------------
+[docs_extract]
+name          = "docs.extract"
+worker        = "docs"
+input         = { file_path = "string", schema = "object" }
+output        = "object"
+timeout_ms    = 60000
+priority      = 0
+
+[docs_table]
+name          = "docs.table"
+worker        = "docs"
+input         = { file_path = "string", page = "integer" }
+output        = "object"
+timeout_ms    = 60000
+priority      = 0
+
+[docs_search]
+name          = "docs.search"
+worker        = "docs"
+input         = { query = "string", top_k = "integer" }
+output        = "object"
+timeout_ms    = 15000
+priority      = 0
+
+# ---------------------------------------------------------------------------
+# reasoning (local LLM via Ollama)
+# ---------------------------------------------------------------------------
+[reasoning_answer]
+name          = "reasoning.answer"
+worker        = "reasoning"
+input         = { question = "string", context = "string", max_tokens = "integer" }
+output        = "object"
+timeout_ms    = 120000
+priority      = 0
+
+[reasoning_summarize]
+name          = "reasoning.summarize"
+worker        = "reasoning"
+input         = { text = "string", template = "string", max_tokens = "integer" }
+output        = "object"
+timeout_ms    = 120000
+priority      = 0
+
+[reasoning_complete]
+name          = "reasoning.complete"
+worker        = "reasoning"
+input         = { prompt = "string", max_tokens = "integer" }
+output        = "object"
+timeout_ms    = 120000
+priority      = 0
+
+# ---------------------------------------------------------------------------
+# timeseries (WavqWise; Weekend 8)
+# ---------------------------------------------------------------------------
+[timeseries_forecast]
+name          = "timeseries.forecast"
+worker        = "timeseries"
+input         = { series = "array", horizon = "integer" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 0
+
+[timeseries_detect_anomaly]
+name          = "timeseries.detect_anomaly"
+worker        = "timeseries"
+input         = { series = "array", threshold = "number" }
+output        = "object"
+timeout_ms    = 30000
+priority      = 0
+
+[timeseries_backends]
+name          = "timeseries.backends"
+worker        = "timeseries"
+input         = {}
+output        = "object"
+timeout_ms    = 5000
+priority      = 1
+
+# ---------------------------------------------------------------------------
+# memory (adaptive-intelligence; Weekend 9)
+# ---------------------------------------------------------------------------
+[memory_recall]
+name          = "memory.recall"
+worker        = "memory"
+input         = { session_id = "string", query = "string", top_k = "integer" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 0
+
+[memory_update]
+name          = "memory.update"
+worker        = "memory"
+input         = { session_id = "string", item = "object" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 0
+
+[memory_reward]
+name          = "memory.reward"
+worker        = "memory"
+input         = { query_id = "string", score = "number" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 0
+
+# ---------------------------------------------------------------------------
+# guard (AntGuard; Weekend 10)
+# ---------------------------------------------------------------------------
+[guard_scan]
+name          = "guard.scan"
+worker        = "guard"
+input         = { text = "string" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 1
+
+[guard_redact]
+name          = "guard.redact"
+worker        = "guard"
+input         = { text = "string", replacement = "string" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 1
+
+[guard_audit]
+name          = "guard.audit"
+worker        = "guard"
+input         = { subject = "string", payload = "object" }
+output        = "object"
+timeout_ms    = 10000
+priority      = 1
+
+# ---------------------------------------------------------------------------
+# eval (LLMEvalKit; Weekend 12)
+# ---------------------------------------------------------------------------
+[eval_score]
+name          = "eval.score"
+worker        = "eval"
+input         = { predicted = "string", expected = "string", metrics = "array" }
+output        = "object"
+timeout_ms    = 15000
+priority      = 0
+
+[eval_compare]
+name          = "eval.compare"
+worker        = "eval"
+input         = { a = "string", b = "string" }
+output        = "object"
+timeout_ms    = 5000
+priority      = 0
+
+[eval_golden_run]
+name          = "eval.golden_run"
+worker        = "eval"
+input         = { set_name = "string" }
+output        = "object"
+timeout_ms    = 120000
+priority      = -1
+
+# ---------------------------------------------------------------------------
+# Human-in-the-loop. These are served by ant-feedback directly, not by a
+# worker. The HTTP routes exist regardless; these entries are documentation.
+# ---------------------------------------------------------------------------
+#   feedback.rate         POST /api/v1/feedback/rate
+#   feedback.correct      POST /api/v1/feedback/correct
+#   feedback.approve      POST /api/v1/feedback/approve
+#   feedback.reject       POST /api/v1/feedback/reject
+#   feedback.annotate     POST /api/v1/feedback/annotate
+#   feedback.pending      GET  /api/v1/feedback/pending

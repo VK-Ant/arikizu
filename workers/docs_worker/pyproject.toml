@@ -1,0 +1,23 @@
+[project]
+name = "docs-worker"
+version = "0.0.1"
+description = "Arikizu docs worker; wraps DocQWise/Vellex for extract, table, search"
+requires-python = ">=3.11"
+dependencies = [
+    "arikizu-worker-sdk",
+    # "docqwise>=0.1.0",
+    # "vellex>=0.1.0",
+]
+
+[project.scripts]
+docs-worker = "docs_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["docs_worker"]

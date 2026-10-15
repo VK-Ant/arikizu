@@ -1,0 +1,37 @@
+[Unit]
+Description=Arikizu edge-AI operating system
+Documentation=https://github.com/VK-Ant/arikizu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=arikizu
+Group=arikizu
+WorkingDirectory=/var/lib/arikizu
+ExecStart=/usr/bin/arikizu run \
+    --config /etc/arikizu/arikizu.yaml \
+    --capabilities /etc/arikizu/capabilities.toml \
+    --socket-dir /run/arikizu
+Restart=on-failure
+RestartSec=5
+
+# Sandbox a bit; Arikizu does not need root or wide filesystem access.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/arikizu /run/arikizu
+# Loosen as needed when workers must reach specific devices.
+# For cameras: ReadWritePaths=+/dev/video0
+# For USB mics: SupplementaryGroups=audio
+
+# Resource caps — tune per device.
+LimitNOFILE=65536
+TasksMax=512
+
+Environment=RUST_LOG=info
+Environment=ARIKIZU_HOME=/var/lib/arikizu
+
+[Install]
+WantedBy=multi-user.target

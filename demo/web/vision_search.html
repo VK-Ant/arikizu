@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Vision Search</title>
+  <style>
+    :root {
+      --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
+      --card: #ffffff; --border: #e5e5e2;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #15150f; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
+              --card: #1f1f18; --border: #2a2a22; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg);
+                 font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+    header { padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .controls { background: var(--card); border: 1px solid var(--border);
+                border-radius: 6px; padding: 12px 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input, select { font: inherit; background: var(--bg); color: var(--fg);
+                    border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; }
+    button { font: inherit; background: var(--accent); color: white; border: none;
+             border-radius: 4px; padding: 6px 14px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; background: var(--card);
+            border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border);
+             font-size: 13px; vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    tr:last-child td { border-bottom: none; }
+    .count { background: var(--accent); color: white; padding: 2px 8px; border-radius: 10px;
+             font-size: 11px; margin-left: 8px; }
+    .class { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono);
+             font-size: 11px; background: color-mix(in srgb, var(--accent) 20%, transparent);
+             color: var(--accent); margin-right: 4px; }
+    .ts { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="margin: 0; font-size: 20px">Arikizu Vision Search</h1>
+    <div class="muted" style="font-size: 13px; margin-top: 4px">
+      Search historical detections from the audit log.
+    </div>
+  </header>
+
+  <main>
+    <div class="controls">
+      <label>class filter:</label>
+      <input id="class" type="text" placeholder="person, laptop, car ..." style="min-width: 200px">
+      <label>min score:</label>
+      <input id="min" type="number" value="0.5" step="0.05" min="0" max="1" style="width: 80px">
+      <label>limit:</label>
+      <input id="limit" type="number" value="100" style="width: 80px">
+      <button id="search">Search</button>
+      <button id="refresh" style="background: var(--card); color: var(--fg); border: 1px solid var(--border);">Auto-refresh</button>
+    </div>
+
+    <div id="summary" style="margin-top: 16px; color: var(--muted);"></div>
+    <table id="results" hidden>
+      <thead>
+        <tr><th>#</th><th>Time</th><th>Image</th><th>Classes</th><th>Backend</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+<script>
+"use strict";
+
+let autoTimer = null;
+
+async function doSearch() {
+  const cls = document.getElementById("class").value.trim().toLowerCase();
+  const minScore = parseFloat(document.getElementById("min").value) || 0;
+  const limit = parseInt(document.getElementById("limit").value, 10) || 100;
+
+  const r = await fetch(`/api/v1/audit?kind=feedback.&limit=${limit}`);
+  // Vision detections are posted via vision.detect and leave an audit trail when
+  // emits_events is set. For now, we query the generic audit; worker-side event
+  // emission wires in Weekend 5 so this filter is forward-compatible.
+  // We also fetch raw vision replies from the /events stream in the dashboard.
+  // For scaffold, show whatever audit rows match.
+  const rows = await r.json();
+
+  const sum = document.getElementById("summary");
+  const tbl = document.getElementById("results");
+  const tbody = tbl.querySelector("tbody");
+  tbody.innerHTML = "";
+
+  const matches = rows.filter(row => {
+    const p = row.payload || {};
+    const dets = p.detections || [];
+    if (dets.length === 0) return false;
+    if (cls && !dets.some(d => (d.class || "").toLowerCase().includes(cls))) return false;
+    if (!dets.some(d => (d.score || 0) >= minScore)) return false;
+    return true;
+  });
+
+  sum.innerHTML = `<b>${matches.length}</b> matching detection events` +
+                  (matches.length === rows.length ? "" : ` (of ${rows.length} audit rows searched)`);
+
+  if (matches.length === 0) {
+    tbl.hidden = true;
+    sum.innerHTML += `<br><span class="muted">No matches. If you haven't run vision.detect yet, try the vision_live.html page first.</span>`;
+    return;
+  }
+  tbl.hidden = false;
+
+  for (const row of matches) {
+    const p = row.payload || {};
+    const dets = p.detections || [];
+    const classes = [...new Set(dets.map(d => d.class || "obj"))];
+
+    tbody.innerHTML += `
+      <tr>
+        <td class="muted">${row.id}</td>
+        <td class="ts">${new Date(row.ts).toLocaleString()}</td>
+        <td style="font-family: var(--mono); font-size: 12px">${p.image || p.image_path || ""}</td>
+        <td>${classes.map(c => `<span class="class">${c}</span>`).join("")}<span class="count">${dets.length}</span></td>
+        <td class="muted">${p.backend || ""}</td>
+      </tr>
+    `;
+  }
+}
+
+document.getElementById("search").onclick = doSearch;
+document.getElementById("refresh").onclick = () => {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; return; }
+  autoTimer = setInterval(doSearch, 3000);
+  doSearch();
+};
+doSearch();
+</script>
+</body>
+</html>
