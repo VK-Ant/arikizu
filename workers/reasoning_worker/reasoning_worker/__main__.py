@@ -24,10 +24,21 @@ import httpx
 
 from arikizu_worker import Worker
 
+def _auto_discover_gguf() -> str:
+    """Pick the first .gguf file in ./models/ so no yaml edit is needed."""
+    for d in (os.environ.get("ARIKIZU_MODELS_DIR", "./models"), "./models", "../models"):
+        if not os.path.isdir(d):
+            continue
+        files = sorted(f for f in os.listdir(d) if f.endswith(".gguf"))
+        if files:
+            return os.path.join(d, files[0])
+    return ""
+
+
 OLLAMA_ENDPOINT = os.environ.get("ARIKIZU_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
-MODEL = os.environ.get("ARIKIZU_REASONING_MODEL", "qwen2.5:0.5b")
+MODEL = os.environ.get("ARIKIZU_REASONING_MODEL", "smollm2-360m")
 API_KEY = os.environ.get("ARIKIZU_API_KEY", "")
-GGUF_PATH = os.environ.get("ARIKIZU_REASONING_GGUF", "")
+GGUF_PATH = os.environ.get("ARIKIZU_REASONING_GGUF", "") or _auto_discover_gguf()
 
 # OpenAI-compatible endpoints use /v1/chat/completions; the local runtime's
 # native API uses /api/generate. Pick based on the URL shape.
