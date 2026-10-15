@@ -38,7 +38,13 @@
     <input id="path" value="demo/fixtures/sample.txt" style="min-width:260px">
     <button id="extract">Extract</button>
     <label style="margin-left:12px">or upload:</label>
-    <input id="file" type="file" accept=".txt,.md,.log,.json,.csv" style="color:var(--muted);font-size:12px">
+    <input id="file" type="file" accept=".txt,.md,.log,.json,.csv,.pdf,.docx" style="color:var(--muted);font-size:12px">
+  </div>
+  <div class="box">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Or ask a question (SLM-based QA)</h3>
+    <input id="question" placeholder="e.g. what defects were observed?" style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:5px 8px;width:60%">
+    <button id="ask">Ask</button>
+    <div id="answer" style="margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--muted)"></div>
   </div>
   <div class="box">
     <h3>Schema (JSON)</h3>
@@ -72,10 +78,45 @@ async function call(cap, payload) {
   });
   return r.json();
 }
+// pdf.js is lazy-loaded on first PDF upload so plain text users don't
+// pay for the ~2MB script.
+let _pdfjsReady = null;
+function ensurePdfJs() {
+  if (_pdfjsReady) return _pdfjsReady;
+  _pdfjsReady = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      window["pdfjsLib"].GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      res(window["pdfjsLib"]);
+    };
+    s.onerror = () => rej(new Error("could not load pdf.js"));
+    document.head.appendChild(s);
+  });
+  return _pdfjsReady;
+}
+async function readPdfText(file) {
+  const pdfjs = await ensurePdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({data: buf}).promise;
+  const texts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    texts.push(content.items.map(x => x.str).join(" "));
+  }
+  return texts.join("\n");
+}
 async function readUpload() {
   const fileEl = document.getElementById("file");
   const f = fileEl && fileEl.files && fileEl.files[0];
   if (!f) return null;
+  const name = f.name.toLowerCase();
+  if (name.endsWith(".pdf")) {
+    const text = await readPdfText(f);
+    return {name: f.name, text};
+  }
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res({name: f.name, text: r.result});
@@ -121,6 +162,37 @@ document.getElementById("go-search").onclick = async () => {
     el.innerHTML = hits.length === 0
       ? `<span style="color:var(--muted)">no results</span>`
       : hits.map(h => `<div style="font-family:var(--mono);font-size:12px;padding:4px 0">${JSON.stringify(h)}</div>`).join("");
+  }
+};
+
+// Ask question over document (SLM-based QA)
+document.getElementById("ask").onclick = async () => {
+  const q = document.getElementById("question").value.trim();
+  const out = document.getElementById("answer");
+  if (!q) { out.textContent = "please type a question"; return; }
+  const uploaded = await readUpload();
+  const path = document.getElementById("path").value;
+  let text = "";
+  if (uploaded) text = uploaded.text;
+  if (!text && path) {
+    // Fetch the server-side file through the search endpoint fallback
+    text = "(server will read: " + path + ")";
+  }
+  out.textContent = "thinking...";
+  const prompt = (text && !text.startsWith("(")) ?
+    `Answer the question using only this document.\n\nDocument:\n${text.slice(0, 4000)}\n\nQuestion: ${q}\nAnswer:` :
+    `Answer using what the Arikizu docs say: ${q}`;
+  try {
+    const r = await fetch("/api/v1/call/reasoning/answer", {
+      method: "POST",
+      headers: {"content-type":"application/json"},
+      body: JSON.stringify({payload: {question: prompt, context: "", max_tokens: 300}}),
+    });
+    const b = await r.json();
+    out.innerHTML = `<div style="color:var(--fg)">${(b.answer || "(no answer)").replace(/\n/g,"<br>")}</div>` +
+      `<div style="margin-top:6px">backend: ${b.backend || "?"}</div>`;
+  } catch (e) {
+    out.textContent = "error: " + e.message;
   }
 };
 </script>

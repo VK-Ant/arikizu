@@ -224,7 +224,10 @@ find "$MODELS_DIR" -maxdepth 1 -type f ! -name '*.tmp.*' -printf '  %f\t%k KB\n'
 printf '\nEnvironment:\n'
 printf '  export ARIKIZU_MODELS_DIR=%q\n' "$MODELS_DIR"
 printf '  export ARIKIZU_VISION_MODEL=%q\n' "$MODELS_DIR/yolov8n.onnx"
+printf '  export ARIKIZU_REASONING_GGUF=%q\n' "$MODELS_DIR/smollm2-360m-instruct-q4_k_m.gguf"
 if [[ "$TIER" != minimum ]]; then printf '  export ARIKIZU_EMBEDDER_MODEL=%q\n' "$MODELS_DIR/all-MiniLM-L6-v2.onnx"; fi
+printf '\nFor arikizu.yaml, these go under each worker'"'"'s env: block.\n'
+printf 'After editing arikizu.yaml, restart with: pkill -f "arikizu run"; make run\n'
 printf '\nSee docs/MODEL_CATALOG.md for worker requirements and upgrade paths.\n'
 if ((FAILURES > 0)); then
     printf '%sCompleted with %d download/generation failure(s). Review messages above.%s\n' "$YELLOW" "$FAILURES" "$RESET" >&2

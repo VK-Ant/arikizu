@@ -245,7 +245,8 @@ async function tickWebcam() {
     }
     lastTickTs = now;
     document.getElementById("meta").textContent =
-      `backend: ${body.backend || "?"}  detections: ${dets.length}  (webcam)`;
+      `backend: ${body.backend || "?"}  detections: ${dets.length}  (webcam)` +
+      (body.note ? "   " + body.note : "");
     const chips = dets.map((d, i) => {
       const c = COLORS[i % COLORS.length];
       return `<span class="detection" style="background:${c}22;border:1px solid ${c};color:${c}">${d.class ?? "obj"} ${((d.score ?? 0) * 100).toFixed(0)}%</span>`;
