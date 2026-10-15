@@ -6,6 +6,9 @@
 <link rel="icon" type="image/png" href="/demo/favicon.png">
   <title>Arikizu Reasoning</title>
   <style>
+    .backend-banner { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; font-family: ui-monospace, Menlo, monospace; }
+    .backend-banner.ok { background: color-mix(in srgb, var(--pass) 15%, transparent); color: var(--pass); border: 1px solid color-mix(in srgb, var(--pass) 40%, transparent); }
+    .backend-banner.warn { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
     :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
             --border:#e5e5e2; --pass:#2d8a4e; --fail:#b84040;
             --sans: -apple-system, system-ui, Roboto, sans-serif;
@@ -58,10 +61,11 @@
   <header>
     <h1 style="margin:0;font-size:20px">Arikizu Reasoning</h1>
     <div style="color:var(--muted); font-size:13px; margin-top:4px;">
-      Local LLM via Ollama / LAN gateway. Falls back silently if the worker isn't running.
+      Local LLM via GGUF file, HTTP endpoint, or built-in knowledge base. Backend is picked automatically.
     </div>
   </header>
   <main>
+    <div id="backend-banner" class="backend-banner" hidden></div>
     <div class="mode">
       Mode:
       <select id="mode">
@@ -141,7 +145,23 @@ async function send() {
     const content = body.answer || body.summary || body.completion || body.error || "(empty)";
     thinking.textContent = content;
     thinking.parentElement.querySelector(".meta").textContent =
-      `${mode} · ${body.model || ""} · ${ms} ms` + (body.error ? ` · ${body.error}` : "");
+      `${mode} · ${body.model || ""} · backend=${body.backend || "?"} · ${ms} ms` + (body.error ? ` · ${body.error}` : "");
+    // Prominent banner so the user knows what is actually answering.
+    const b = (body.backend || "").toLowerCase();
+    const banner = document.getElementById("backend-banner");
+    if (banner) {
+      if (b === "local-gguf") {
+        banner.textContent = "running local LLM via llama-cpp (" + (body.model || "") + ")";
+        banner.className = "backend-banner ok";
+      } else if (b === "http") {
+        banner.textContent = "using remote LLM endpoint";
+        banner.className = "backend-banner ok";
+      } else {
+        banner.textContent = "built-in mode (no LLM loaded). To get real answers: scripts/download-default-models.sh --tier minimum, then set ARIKIZU_REASONING_GGUF in arikizu.yaml.";
+        banner.className = "backend-banner warn";
+      }
+      banner.hidden = false;
+    }
   } catch (e) {
     thinking.textContent = `(error: ${e.message})`;
   } finally {

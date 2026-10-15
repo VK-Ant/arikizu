@@ -159,7 +159,8 @@
       display: flex; align-items: center; justify-content: center;
     }
     .status-icon svg { width: 16px; height: 16px; color: var(--muted); }
-    .status-label { flex: 1; font-size: 14px; }
+    .status-label { flex: 1; font-size: 14px; color: var(--muted); }
+    .status-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
     .status-dot {
       width: 10px; height: 10px; border-radius: 50%;
       background: var(--ok); box-shadow: 0 0 6px rgba(74,222,128,0.5);
@@ -350,32 +351,29 @@
             <div class="panel-title">System Status</div>
             <div id="status-rows">
               <div class="status-row">
-                <div class="status-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2a10 10 0 1010 10M12 2v10l6 6"/>
-                  </svg>
-                </div>
-                <div class="status-label">AI Services</div>
+                <div class="status-label">Workers running</div>
+                <div class="status-value" id="stat-workers">-</div>
                 <span class="status-dot" id="dot-ai"></span>
               </div>
               <div class="status-row">
-                <div class="status-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                    <path d="M3 5v14a9 3 0 0018 0V5M3 12a9 3 0 0018 0"/>
-                  </svg>
-                </div>
-                <div class="status-label">Storage</div>
-                <span class="status-dot" id="dot-storage"></span>
+                <div class="status-label">Capabilities</div>
+                <div class="status-value" id="stat-caps">-</div>
+                <span class="status-dot"></span>
               </div>
               <div class="status-row">
-                <div class="status-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M5 12a7 7 0 0114 0M2 9a11 11 0 0120 0M9 15a3 3 0 016 0M12 21h.01"/>
-                  </svg>
-                </div>
-                <div class="status-label">Network</div>
-                <span class="status-dot" id="dot-net"></span>
+                <div class="status-label">Uptime</div>
+                <div class="status-value" id="stat-uptime">-</div>
+                <span class="status-dot"></span>
+              </div>
+              <div class="status-row">
+                <div class="status-label">Audit rows</div>
+                <div class="status-value" id="stat-audit">-</div>
+                <span class="status-dot"></span>
+              </div>
+              <div class="status-row">
+                <div class="status-label">Pending approvals</div>
+                <div class="status-value" id="stat-approvals">-</div>
+                <span class="status-dot" id="dot-approve"></span>
               </div>
             </div>
           </div>
@@ -401,6 +399,14 @@ function greeting() {
 greeting();
 setInterval(greeting, 60000);
 
+function fmtUptime(s) {
+  s = Math.floor(s || 0);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+  const h = Math.floor(s/3600);
+  const m = Math.floor((s%3600)/60);
+  return `${h}h ${m}m`;
+}
 async function pollStatus() {
   try {
     const r = await fetch(`${API}/status`);
@@ -409,17 +415,26 @@ async function pollStatus() {
     document.getElementById("online-dot").classList.remove("off");
     document.getElementById("online-text").textContent = "Online";
     document.getElementById("device-name").textContent = labelFor(s.device);
-    document.getElementById("dot-ai").className = "status-dot " + (s.workers.length > 0 ? "" : "warn");
-    document.getElementById("dot-storage").className = "status-dot";
-    document.getElementById("dot-net").className = "status-dot";
+    const ready = (s.workers || []).filter(w => w.state === "Ready").length;
+    document.getElementById("stat-workers").textContent = `${ready} / ${(s.workers || []).length}`;
+    document.getElementById("stat-caps").textContent = s.capability_count ?? "-";
+    document.getElementById("stat-uptime").textContent = fmtUptime(s.uptime_s);
+    document.getElementById("stat-audit").textContent = s.audit_rows ?? "-";
+    document.getElementById("stat-approvals").textContent = s.pending_approvals ?? 0;
+    document.getElementById("dot-ai").className = "status-dot " + (ready > 0 ? "" : "warn");
+    document.getElementById("dot-approve").className = "status-dot " + ((s.pending_approvals || 0) > 0 ? "warn" : "");
     renderActivity(await fetchActivity());
   } catch (e) {
     document.getElementById("online-dot").classList.add("off");
     document.getElementById("online-text").textContent = "Offline";
     document.getElementById("device-name").textContent = "No connection";
+    document.getElementById("stat-workers").textContent = "-";
+    document.getElementById("stat-caps").textContent = "-";
+    document.getElementById("stat-uptime").textContent = "-";
+    document.getElementById("stat-audit").textContent = "-";
+    document.getElementById("stat-approvals").textContent = "-";
     document.getElementById("dot-ai").className = "status-dot fail";
-    document.getElementById("dot-storage").className = "status-dot fail";
-    document.getElementById("dot-net").className = "status-dot fail";
+    document.getElementById("dot-approve").className = "status-dot fail";
   }
 }
 

@@ -259,13 +259,35 @@ def main() -> None:
     )
     logger = logging.getLogger("reasoning")
 
-    local_available = GGUF_PATH and os.path.isfile(GGUF_PATH)
+    gguf_exists = GGUF_PATH and os.path.isfile(GGUF_PATH)
+    try:
+        import llama_cpp  # noqa: F401
+        llama_cpp_installed = True
+    except Exception:
+        llama_cpp_installed = False
     logger.info(
-        "reasoning backends: local_gguf=%s http=%s model=%s",
-        "yes" if local_available else "no",
-        OLLAMA_ENDPOINT,
-        MODEL,
+        "reasoning backends: gguf_path=%r gguf_exists=%s llama_cpp_installed=%s "
+        "http_endpoint=%s model=%s",
+        GGUF_PATH or "(unset)", gguf_exists, llama_cpp_installed,
+        OLLAMA_ENDPOINT, MODEL,
     )
+    if gguf_exists and llama_cpp_installed:
+        logger.info("reasoning: will use local-gguf backend on first call")
+    elif gguf_exists and not llama_cpp_installed:
+        logger.warning(
+            "reasoning: GGUF file found but llama-cpp-python not installed. "
+            "Install with: cd workers && uv add llama-cpp-python --package reasoning-worker"
+        )
+    elif not gguf_exists and GGUF_PATH:
+        logger.warning(
+            "reasoning: ARIKIZU_REASONING_GGUF=%s does not exist. "
+            "Download with: scripts/download-default-models.sh --tier minimum",
+            GGUF_PATH,
+        )
+    else:
+        logger.info(
+            "reasoning: no local GGUF configured; will try HTTP then fall to builtin KB"
+        )
 
     worker = Worker("reasoning")
 
