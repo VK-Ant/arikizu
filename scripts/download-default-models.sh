@@ -154,7 +154,7 @@ fetch_and_manifest \
 
 printf '\nreasoning (small instruct LLM):\n'
 fetch_and_manifest \
-    'https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q4_k_m.gguf' \
+    'https://huggingface.co/unsloth/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf' \
     'smollm2-360m-instruct-q4_k_m.gguf' 'SmolLM2 360M instruct model, Q4_K_M' 'llama-cpp' 'Apache-2.0'
 
 printf '\ntimeseries / memory (optional local sklearn baselines):\n'
