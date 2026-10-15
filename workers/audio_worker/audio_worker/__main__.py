@@ -17,6 +17,29 @@ from typing import Any
 from arikizu_worker import Worker
 
 
+def _find_project_root_early() -> Path:
+    """Same project-root walk the vision worker uses. The supervisor spawns
+    us from workers/audio_worker/, so './models' needs resolving against
+    the project root, not our package dir."""
+    p = Path.cwd().resolve()
+    for parent in [p] + list(p.parents):
+        if (parent / "arikizu.yaml.example").exists() or \
+           (parent / "capabilities.toml").exists() or \
+           (parent / "Cargo.toml").exists():
+            return parent
+    return p
+
+
+def _resolve_models_dir(env_value: str) -> str:
+    if os.path.isabs(env_value):
+        return env_value
+    root = _find_project_root_early()
+    candidate = root / env_value
+    if candidate.exists():
+        return str(candidate)
+    return str(Path(env_value).resolve())
+
+
 def _auto_discover_vad(models_dir: str) -> str:
     p = Path(models_dir)
     if not p.exists():
@@ -27,27 +50,40 @@ def _auto_discover_vad(models_dir: str) -> str:
     return ""
 
 
-MODELS_DIR = os.environ.get("ARIKIZU_MODELS_DIR", "./models")
+MODELS_DIR = _resolve_models_dir(os.environ.get("ARIKIZU_MODELS_DIR", "./models"))
 VAD_PATH = os.environ.get("ARIKIZU_AUDIO_VAD_MODEL") or _auto_discover_vad(MODELS_DIR)
 
 _VAD_SESSION = None
+_LOAD_ERROR = ""  # last reason VAD failed to load, surfaced via audio.backends
 
 
 def _try_load_vad(path: str, logger: logging.Logger):
-    if not path or not os.path.isfile(path):
-        logger.warning("no VAD model at %r; audio.vad will return a note", path)
+    global _LOAD_ERROR
+    _LOAD_ERROR = ""
+    if not path:
+        _LOAD_ERROR = (
+            f"no VAD file found. Looked in MODELS_DIR={MODELS_DIR!r}; "
+            "set ARIKIZU_AUDIO_VAD_MODEL or run scripts/download-default-models.sh"
+        )
+        logger.warning(_LOAD_ERROR)
+        return None
+    if not os.path.isfile(path):
+        _LOAD_ERROR = f"VAD path does not exist: {path!r}"
+        logger.warning(_LOAD_ERROR)
         return None
     try:
         import onnxruntime as ort
     except Exception as e:
-        logger.warning("onnxruntime missing: %s", e)
+        _LOAD_ERROR = f"onnxruntime not installed: {e}. Fix: cd workers && uv sync"
+        logger.warning(_LOAD_ERROR)
         return None
     try:
         sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
         logger.info("loaded %s", path)
         return sess
     except Exception as e:
-        logger.warning("could not load %s: %s", path, e)
+        _LOAD_ERROR = f"onnxruntime failed to load {path!r}: {type(e).__name__}: {e}"
+        logger.warning(_LOAD_ERROR)
         return None
 
 
@@ -285,9 +321,18 @@ def main() -> None:
 
     @worker.handler("audio.backends")
     def backends() -> dict[str, Any]:
+        try:
+            import onnxruntime as ort
+            ort_version = ort.__version__
+        except Exception as e:
+            ort_version = f"not installed: {e}"
         return {
             "vad_path": VAD_PATH or "(none)",
+            "models_dir": MODELS_DIR,
+            "cwd": os.getcwd(),
             "vad_loaded": _VAD_SESSION is not None,
+            "load_error": _LOAD_ERROR or ("" if _VAD_SESSION is not None else "VAD not loaded; see audio_worker logs"),
+            "onnxruntime_version": ort_version,
         }
 
     asyncio.run(worker.run())

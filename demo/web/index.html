@@ -59,7 +59,7 @@
     .smoke-row { display: grid; grid-template-columns: 90px 1fr 60px; gap: 10px;
                  padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center; }
     .smoke-cap { font-family: var(--mono); }
-    .smoke-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    .smoke-detail { color: var(--muted); font-size: 11px; word-break: break-word; }
     .status-tag {
       display: inline-block; font-weight: 600; padding: 1px 6px; border-radius: 3px; font-size: 11px;
     }
@@ -239,10 +239,24 @@ async function runDiag() {
       });
       const b = await r.json();
       const ok = c.pass(b);
+      // Build a specific "why" line when something isn't loaded. The
+      // worker's backends endpoint returns `load_error` with the exact
+      // failure (file not found, onnxruntime missing, unsupported op,
+      // etc.) and we also show the paths it actually looked at.
+      let why = "loaded";
+      if (!ok) {
+        const err = b.load_error || b.note || "";
+        const path = b.model_path || b.vad_path || b.gguf_path || "(unset)";
+        const dir  = b.models_dir ? ` dir=${b.models_dir}` : "";
+        const cwd  = b.cwd ? ` cwd=${b.cwd}` : "";
+        why = err
+          ? `${err}<br><small style="color:var(--muted)">path=${path}${dir}${cwd}</small>`
+          : `run: ${c.fix}`;
+      }
       row = `
         <div class="smoke-row">
           <div><span class="status-tag ${ok?'PASS':'FAIL'}">${ok?'READY':'MISSING'}</span></div>
-          <div class="smoke-cap">${c.label}<br><span class="smoke-detail">${ok?'loaded':'run: '+c.fix}</span></div>
+          <div class="smoke-cap">${c.label}<br><span class="smoke-detail" style="white-space:normal">${why}</span></div>
           <div></div>
         </div>`;
     } catch (e) {

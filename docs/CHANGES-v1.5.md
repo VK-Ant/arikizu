@@ -1,5 +1,76 @@
 # Arikizu v1.5
 
+## v1.5.33 (surface the real reason models don't load)
+
+User screenshot after v1.5.32: reasoning READY, vision + audio still
+MISSING even though the files are on disk and sized correctly
+(yolov8n.onnx = 12 MB, silero_vad.onnx = 2.3 MB). My project-root fix
+is reaching the files; the ONNX session is failing to load them.
+
+Most likely cause: the Kalray yolov8n.onnx mirror ships specialized
+ops that some onnxruntime builds reject. The script already pulled it
+once with no checksum so it is sitting on disk and the "already
+exists" fast path skips a refresh.
+
+**Fix:**
+
+- Switched vision download primary to `onnx-community/yolov8n` (plain
+  CPU-friendly ONNX export); Kalray stays as fallback.
+- Added `--force` flag to `scripts/download-default-models.sh` so an
+  existing file can be replaced in-place.
+- `vision.backends` and `audio.backends` now return `load_error`,
+  `models_dir`, and `cwd`, with the exact exception the ONNX loader
+  threw. No more guessing.
+- Demo-hub diagnostics panel shows that `load_error` inline under the
+  MISSING tag, so VK can read the real failure without opening logs.
+
+**On WSL to re-fetch with the new mirror:**
+
+```
+scripts/download-default-models.sh --force
+pkill -f arikizu; make run
+```
+
+If the YOLO file still fails to load, the diagnostic row will now
+print exactly which onnxruntime exception threw.
+
+## v1.5.32 (the real "nothing loads" fix)
+
+v1.5.31 added the diagnostics, which proved the user's point: the model
+files were on disk, but the workers still reported "no model loaded".
+The actual cause: workers are spawned by the Rust supervisor from inside
+their package dir (workers/vision_worker/, workers/audio_worker/, etc).
+The default `ARIKIZU_MODELS_DIR=./models` therefore resolved to
+`workers/vision_worker/models/` which was empty. The model file sits at
+`<project_root>/models/yolov8n.onnx`.
+
+**Fix:**
+
+- Each worker now walks up from its CWD looking for a project marker
+  (arikizu.yaml.example, capabilities.toml, or Cargo.toml) and resolves
+  `./models` against that root instead of its own package dir.
+- Done in vision_worker, audio_worker, and reasoning_worker.
+- Zero config change needed: existing env vars still win if set
+  explicitly, absolute paths still work, and the fallback is the old
+  CWD-relative behavior for anyone running outside the project.
+
+**Audio indicator conflict (also user-reported):**
+
+The screenshot showed "Live transcript: help" but the mic indicator
+stuck at "mic: silence". Root cause: the 1-second PCM chunker was
+posting to the server every second, which returned "no speech" (because
+the chunker's audio stream and the Web Speech API's audio stream are
+separate pipes), and that result overwrote the recognizer's "KW: help"
+with "silence" within one tick.
+
+- PCM chunker now defers to the recognizer when the recognizer is
+  running (Chrome and Edge). It only writes the indicator when the
+  recognizer is absent (Firefox fallback).
+- Indicator is sticky: a KW hit holds for 2.5s so a one-word match
+  stays visible instead of being wiped by the next tick.
+- Recognizer also sets "heard: ..." for speech that didn't match a
+  keyword, so you can see it IS listening even without a hit.
+
 ## v1.5.31 (make it visible when things are broken)
 
 The user's complaint on v1.5.30 was "basically no vision model is loaded,

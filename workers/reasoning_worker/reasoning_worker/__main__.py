@@ -24,9 +24,29 @@ import httpx
 
 from arikizu_worker import Worker
 
+def _project_root() -> str:
+    """Walk up from CWD until a project marker is found. The supervisor
+    spawns us from workers/reasoning_worker/, so './models' needs
+    resolving against the project root, not our package dir."""
+    from pathlib import Path
+    p = Path(os.getcwd()).resolve()
+    for parent in [p] + list(p.parents):
+        if (parent / "arikizu.yaml.example").exists() or \
+           (parent / "capabilities.toml").exists() or \
+           (parent / "Cargo.toml").exists():
+            return str(parent)
+    return str(p)
+
+
 def _auto_discover_gguf() -> str:
-    """Pick the first .gguf file in ./models/ so no yaml edit is needed."""
-    for d in (os.environ.get("ARIKIZU_MODELS_DIR", "./models"), "./models", "../models"):
+    """Pick the first .gguf file in ./models/ so no yaml edit is needed.
+    Searches the project root's models/ dir regardless of worker CWD.
+    """
+    root = _project_root()
+    env_dir = os.environ.get("ARIKIZU_MODELS_DIR", "./models")
+    candidates = [env_dir, os.path.join(root, env_dir), os.path.join(root, "models"),
+                  "./models", "../models"]
+    for d in candidates:
         if not os.path.isdir(d):
             continue
         files = sorted(f for f in os.listdir(d) if f.endswith(".gguf"))

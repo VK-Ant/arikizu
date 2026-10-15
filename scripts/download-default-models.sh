@@ -16,6 +16,7 @@ set -Eeuo pipefail
 
 MODELS_DIR="${ARIKIZU_MODELS_DIR:-./models}"
 TIER="minimum"
+FORCE=0
 
 usage() {
     sed -n '2,/^set -Eeuo pipefail/p' "$0" | sed 's/^# \{0,1\}//' | sed '$d'
@@ -40,6 +41,8 @@ while (($#)); do
             (($# >= 2)) || { echo "error: --with requires a value" >&2; exit 2; }
             [[ "$2" == "whisper" ]] || { echo "error: unsupported --with value: $2" >&2; exit 2; }
             TIER="standard"; shift 2 ;;
+        -f|--force)
+            FORCE=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -67,7 +70,10 @@ FAILURES=0
 fetch() {
     local url="$1" out="$2" expected_sha="${3:-}" dest="$MODELS_DIR/$2" tmp actual
     if [[ -f "$dest" ]]; then
-        if [[ -n "$expected_sha" ]]; then
+        if (( FORCE )); then
+            printf '%s  !!  %s%s --force set; re-downloading\n' "$YELLOW" "$out" "$RESET"
+            rm -f "$dest"
+        elif [[ -n "$expected_sha" ]]; then
             actual="$(sha256_file "$dest")"
             if [[ "$actual" == "$expected_sha" ]]; then
                 printf '%s  OK  %s%s (already present; SHA-256 verified)\n' "$GREEN" "$out" "$RESET"
@@ -75,7 +81,7 @@ fetch() {
             fi
             printf '%s  !!  %s%s checksum differs; downloading again\n' "$YELLOW" "$out" "$RESET"
         else
-            printf '%s  --  %s%s already exists (checksum not pinned; keeping file)\n' "$YELLOW" "$out" "$RESET"
+            printf '%s  --  %s%s already exists (checksum not pinned; keeping file; use --force to refresh)\n' "$YELLOW" "$out" "$RESET"
             return 0
         fi
     fi
@@ -143,9 +149,17 @@ fetch_and_manifest() {
 printf '%stier: %s%s  ->  %s\n\n' "$GREEN" "$TIER" "$RESET" "$MODELS_DIR"
 
 printf 'vision:\n'
-fetch_and_manifest \
-    'https://huggingface.co/Kalray/yolov8/resolve/main/yolov8n.onnx' \
-    'yolov8n.onnx' 'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'
+# Try two mirrors because the HF Kalray export has specialized ops that
+# some onnxruntime builds reject. The onnx-community export is a plain
+# CPU-friendly ONNX that loads cleanly on x86_64 and arm64.
+if ! fetch_and_manifest \
+    'https://huggingface.co/onnx-community/yolov8n/resolve/main/onnx/model.onnx' \
+    'yolov8n.onnx' 'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'; then
+  printf '  !!  onnx-community mirror failed; trying Kalray mirror...\n' >&2
+  fetch_and_manifest \
+      'https://huggingface.co/Kalray/yolov8/resolve/main/yolov8n.onnx' \
+      'yolov8n.onnx' 'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'
+fi
 
 printf '\naudio (voice activity detection):\n'
 fetch_and_manifest \

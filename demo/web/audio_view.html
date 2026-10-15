@@ -197,9 +197,17 @@ let micBuf = [];
 let micSampleRate = 16000;
 let micChunkTimer = null;
 
+let _kwHoldUntil = 0;
 function setMicIndicator(txt, color) {
   const el = document.getElementById("mic-indicator");
   if (!el) return;
+  // A KW hit sticks for 2.5s so a one-word keyword stays visible.
+  const now = Date.now();
+  if (txt.startsWith("KW:")) {
+    _kwHoldUntil = now + 2500;
+  } else if (now < _kwHoldUntil) {
+    return;  // still inside the sticky window; don't overwrite
+  }
   el.textContent = "mic: " + txt;
   el.style.color = color || "var(--muted)";
 }
@@ -240,26 +248,27 @@ async function startMic() {
         ctx.stroke();
       }
     };
-    // Every 1 second, send a chunk to the server for VAD
+    // Every 1 second, send a chunk to the server for VAD (audit log only).
+    // The indicator is driven by the browser recognizer (startRecognizer),
+    // which does real phonetic matching. The PCM chunker here just keeps
+    // the server-side VAD call warm so the operator dashboard shows
+    // activity; it does NOT touch the indicator, which would overwrite
+    // the recognizer's "KW: help" with "silence".
     micChunkTimer = setInterval(async () => {
       if (micBuf.length < micSampleRate) return;  // need 1s of data
       const chunk = micBuf.slice(0, micSampleRate);
       micBuf = micBuf.slice(micSampleRate);
+      // Only fire the server call when the recognizer is NOT running — the
+      // recognizer owns the mic in Chrome/Edge, so this VAD call is a
+      // fallback for Firefox or anywhere Web Speech API is missing.
+      if (recognizer) return;
       try {
-        const kwRaw = (document.getElementById("keywords") || {}).value || "";
-        const keywords = kwRaw.split(",").map(s => s.trim()).filter(Boolean);
-        const path = keywords.length ? "/api/v1/call/audio/keyword_spot" : "/api/v1/call/audio/vad";
-        const payload = {pcm: Array.from(chunk), sample_rate: micSampleRate, threshold: 0.3};
-        if (keywords.length) payload.keywords = keywords;
-        const r = await fetch(path, {
+        const r = await fetch("/api/v1/call/audio/vad", {
           method: "POST", headers: {"content-type":"application/json"},
-          body: JSON.stringify({payload}),
+          body: JSON.stringify({payload: {pcm: Array.from(chunk), sample_rate: micSampleRate, threshold: 0.3}}),
         });
         const b = await r.json();
-        if (b.hits && b.hits.length > 0) {
-          const matched = b.hits.map(h => h.keyword).join(", ");
-          setMicIndicator("KW: " + matched, "var(--pass)");
-        } else if (b.speech_detected || (b.segments && b.segments.length > 0)) {
+        if (b.speech_detected || (b.segments && b.segments.length > 0)) {
           setMicIndicator("SPEECH", "var(--pass)");
         } else {
           setMicIndicator("silence", "var(--muted)");
@@ -357,6 +366,10 @@ function startRecognizer() {
       const localHits = keywords.filter(k => haystack.includes(k));
       if (localHits.length) {
         setMicIndicator("KW: " + localHits.join(", "), "var(--pass)");
+      } else if (shown) {
+        // Speech happened but didn't match a keyword. Show that we heard
+        // something so the user doesn't think the mic is dead.
+        setMicIndicator("heard: " + shown.slice(-30), "var(--fg)");
       }
       // Also post FINAL transcripts to the server so hits land in the
       // audit log and the operator dashboard sees them.
@@ -380,6 +393,7 @@ function startRecognizer() {
       }
     };
     recognizer.start();
+    setMicIndicator("listening", "var(--pass)");
     document.getElementById("asr-status").textContent =
       "keyword matching: browser speech recognition active";
     document.getElementById("asr-status").style.color = "var(--pass)";

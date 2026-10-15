@@ -43,6 +43,34 @@ COCO_NAMES = [
 ]
 
 
+def _find_project_root_early() -> Path:
+    """Walk up from CWD until we see a project marker. The Rust supervisor
+    spawns workers from workers/<name>/, so the default './models' would
+    resolve relative to that package dir, not the project root where the
+    model file actually lives. Walking up fixes it with zero config.
+    """
+    p = Path.cwd().resolve()
+    for parent in [p] + list(p.parents):
+        if (parent / "arikizu.yaml.example").exists() or \
+           (parent / "capabilities.toml").exists() or \
+           (parent / "Cargo.toml").exists():
+            return parent
+    return p
+
+
+def _resolve_models_dir(env_value: str) -> str:
+    """Resolve the models dir against the project root, not the worker CWD."""
+    if os.path.isabs(env_value):
+        return env_value
+    root = _find_project_root_early()
+    # Try project-root first, then CWD (back-compat for anyone with the old
+    # layout who put models next to the worker package).
+    candidate = root / env_value
+    if candidate.exists():
+        return str(candidate)
+    return str(Path(env_value).resolve())
+
+
 def _auto_discover_model(models_dir: str) -> str:
     p = Path(models_dir)
     if not p.exists():
@@ -55,21 +83,35 @@ def _auto_discover_model(models_dir: str) -> str:
     return ""
 
 
-MODELS_DIR = os.environ.get("ARIKIZU_MODELS_DIR", "./models")
+MODELS_DIR = _resolve_models_dir(os.environ.get("ARIKIZU_MODELS_DIR", "./models"))
 MODEL_PATH = os.environ.get("ARIKIZU_VISION_MODEL") or _auto_discover_model(MODELS_DIR)
 INPUT_SIZE = int(os.environ.get("ARIKIZU_VISION_INPUT_SIZE", "640"))
 
 _SESSION = None
+_LOAD_ERROR = ""  # last reason the model failed to load, surfaced via vision.backends
 
 
 def _try_load_onnx(path: str, logger: logging.Logger):
-    if not path or not os.path.isfile(path):
-        logger.warning("no vision model at %r; detect handler will return no-model note", path)
+    global _LOAD_ERROR
+    _LOAD_ERROR = ""
+    if not path:
+        _LOAD_ERROR = (
+            f"no model file found. Looked in MODELS_DIR={MODELS_DIR!r}; "
+            "set ARIKIZU_VISION_MODEL or run scripts/download-default-models.sh"
+        )
+        logger.warning(_LOAD_ERROR)
+        return None
+    if not os.path.isfile(path):
+        _LOAD_ERROR = f"model path does not exist: {path!r}"
+        logger.warning(_LOAD_ERROR)
         return None
     try:
         import onnxruntime as ort
     except Exception as e:
-        logger.warning("onnxruntime not installed: %s; detect handler will return no-model note", e)
+        _LOAD_ERROR = (
+            f"onnxruntime not installed: {e}. Fix: cd workers && uv sync"
+        )
+        logger.warning(_LOAD_ERROR)
         return None
     try:
         providers = ["CPUExecutionProvider"]
@@ -81,7 +123,8 @@ def _try_load_onnx(path: str, logger: logging.Logger):
         logger.info("loaded %s with providers=%s", path, providers)
         return sess
     except Exception as e:
-        logger.warning("could not load %s: %s", path, e)
+        _LOAD_ERROR = f"onnxruntime failed to load {path!r}: {type(e).__name__}: {e}"
+        logger.warning(_LOAD_ERROR)
         return None
 
 
@@ -361,12 +404,18 @@ def main() -> None:
         try:
             import onnxruntime as ort
             providers = ort.get_available_providers()
-        except Exception:
+            ort_version = ort.__version__
+        except Exception as e:
             providers = []
+            ort_version = f"not installed: {e}"
         return {
             "model_path": MODEL_PATH or "(none)",
+            "models_dir": MODELS_DIR,
+            "cwd": os.getcwd(),
             "loaded": _SESSION is not None,
+            "load_error": _LOAD_ERROR or ("" if _SESSION is not None else "model not loaded; see vision_worker logs"),
             "providers_available": providers,
+            "onnxruntime_version": ort_version,
             "input_size": INPUT_SIZE,
         }
 
