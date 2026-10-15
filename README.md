@@ -41,14 +41,66 @@ Target: a factory supervisor, nurse, ship engineer, or heritage conservator
 should install Arikizu with one command, connect cameras and mics, and start
 a pipeline from a web UI without touching Python.
 
-Reference device: Jetson Orin Nano 8 GB. Also runs on x86_64 Linux and macOS
-for development.
+## Where it runs
+
+Arikizu is designed for the full edge device family. Reference device is
+the Jetson Orin Nano 8 GB. Also runs on:
+
+| Device                                      | Notes                                 |
+| ------------------------------------------- | ------------------------------------- |
+| Nvidia Jetson Orin Nano / AGX Orin          | Best performance, GPU backend         |
+| Mac (Apple Silicon or Intel)                | Dev-friendly, CoreML backend          |
+| Linux x86_64 (laptop, desktop, small server) | Great for prototyping                |
+| Raspberry Pi 4 (4 GB) or Pi 5               | Entry-level, lowest-cost demo         |
+| Windows via WSL2                            | Dev only                              |
+
+Current demo targets the Pi 4 because that is the hardware I have in
+hand. The same binary and code run on all of the above.
+
+---
+
+## Prerequisites (install these first)
+
+Four things. The `scripts/check_prereqs.sh` script tells you which are
+missing. Install the missing ones:
+
+**Rust (the supervisor is written in Rust):**
+
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+rustc --version   # should print rustc 1.80+
+```
+
+**uv (manages Python workers, faster than pip):**
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+exec $SHELL -l
+uv --version      # should print uv 0.4+
+```
+
+**System packages (platform specific):**
+
+- Mac: `xcode-select --install && brew install pkg-config openssl portaudio`
+- Linux / WSL / Pi / Jetson: `sudo apt install -y build-essential git curl pkg-config libssl-dev python3-pip`
+
+**4 GB swap (ONLY if your device has 4 GB RAM or less, like a Pi 4):**
+
+```
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab
+```
+
+Full device-by-device walkthrough with troubleshooting:
+[`docs/SETUP.md`](docs/SETUP.md).
 
 ---
 
 ## Try it in 5 minutes (laptop)
 
-Prereqs: Rust (`rustup`), `uv`, `make`, `python3`. The `scripts/check_prereqs.sh` script tells you what is missing.
+Once the prereqs above are in place:
 
 ```
 git clone https://github.com/VK-Ant/arikizu

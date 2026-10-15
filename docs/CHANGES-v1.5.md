@@ -1,31 +1,26 @@
 # Arikizu v1.5
 
+## v1.5.10 (zero CI, clearer prereqs, device-neutral framing)
+
+Three cleanups based on repo visibility:
+
+1. Removed security.yml workflow entirely. All CI gone; cargo-audit was
+   failing on scaffolded placeholder code and nothing good comes from
+   red X on a repo page at Weekend 3. Kept dependabot.yml (config
+   only, no checks fire).
+
+2. README prereqs are now a dedicated section with exact install
+   commands for Rust, uv, system packages (per platform), and swap
+   (if under 4 GB RAM). Was one line; now the four tools people need
+   are each callable in one copy-paste block.
+
+3. New "Where it runs" table in README names all five supported
+   device families (Jetson Orin Nano / AGX, Mac Apple Silicon / Intel,
+   Linux x86_64, Pi 4/5, Windows via WSL2). Added a one-liner that
+   the current demo targets Pi only because that is the hardware I
+   have in hand; the binary itself runs on any of them.
+
 ## v1.5.9 (ready to publish)
-
-Three changes based on first-publish feedback:
-
-1. Removed three CI workflows that were failing on push:
-   - `.github/workflows/build.yml` (Rust + Python + UI matrix build)
-   - `.github/workflows/image.yml` (Pi image build)
-   - `.github/workflows/release.yml` (cargo-dist release)
-   
-   These were premature. CI makes sense once the project is stable
-   enough that regressions matter. Right now, failing checks on the
-   repo page just look bad. Re-add when ready (Weekend 15 planned).
-   Kept `security.yml` (CodeQL + dependabot) because those were
-   mostly passing and are useful signal.
-
-2. License is now Apache 2.0.
-   - Added `LICENSE` file with the full Apache 2.0 text.
-   - Updated README License section to point at it.
-   - Copyright notice: "Copyright 2026 Venkatkumar Rajan (VK-Ant)".
-
-3. Replaced the detailed Status section with a Roadmap table.
-   - The old "Live today" bullets listed basics as achievements, which
-     reads odd on a published project.
-   - New Roadmap table shows what each future weekend brings; what
-     works today is implied by the README being usable.
-
 ## v1.5.8 (generic model names in prose)
 ## v1.5.7 (humanized docs)
 ## v1.5.6 (edge-device setup guide)
