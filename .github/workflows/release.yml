@@ -61,7 +61,7 @@ jobs:
           echo "ASSET_SHA=$asset.sha256" >> "$GITHUB_ENV"
 
       - name: upload
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ env.ASSET }}
