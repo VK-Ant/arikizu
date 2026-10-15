@@ -48,6 +48,11 @@
       <button id="mic">Use microphone</button>
       <span id="mic-indicator" style="margin-left:8px;padding:4px 10px;border-radius:4px;background:var(--card);border:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--muted)">mic: idle</span>
     </div>
+    <div class="ctl" style="margin-top:12px">
+      <label>keywords (comma):</label>
+      <input id="keywords" type="text" value="help, stop, alice" placeholder="e.g. help, stop, alice" style="min-width:260px">
+      <span style="color:var(--muted);font-size:12px">spoken keyword hints while mic is on; VAD-based, pending full ASR</span>
+    </div>
 
     <div class="viz">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -61,6 +66,7 @@
     <div class="transcript">
       <h3>audio.vad</h3>
       <div id="vad-result"><span class="meta">not run yet</span></div>
+      <div class="meta" style="margin-top:6px">Note: the shipped sample.wav is a 1-second sine tone, not speech, so VAD correctly reports 0 segments. Use the microphone button for real speech detection.</div>
       <h3 style="margin-top:16px">audio.transcribe</h3>
       <div id="transcript-result"><span class="meta">not run yet</span></div>
     </div>
@@ -230,12 +236,20 @@ async function startMic() {
       const chunk = micBuf.slice(0, micSampleRate);
       micBuf = micBuf.slice(micSampleRate);
       try {
-        const r = await fetch("/api/v1/call/audio/vad", {
+        const kwRaw = (document.getElementById("keywords") || {}).value || "";
+        const keywords = kwRaw.split(",").map(s => s.trim()).filter(Boolean);
+        const path = keywords.length ? "/api/v1/call/audio/keyword_spot" : "/api/v1/call/audio/vad";
+        const payload = {pcm: Array.from(chunk), sample_rate: micSampleRate};
+        if (keywords.length) payload.keywords = keywords;
+        const r = await fetch(path, {
           method: "POST", headers: {"content-type":"application/json"},
-          body: JSON.stringify({payload: {pcm: Array.from(chunk), sample_rate: micSampleRate, threshold: 0.5}}),
+          body: JSON.stringify({payload}),
         });
         const b = await r.json();
-        if (b.speech_detected) {
+        if (b.hits && b.hits.length > 0) {
+          const matched = b.hits.map(h => h.keyword).join(", ");
+          setMicIndicator("KW: " + matched, "var(--pass)");
+        } else if (b.speech_detected || (b.segments && b.segments.length > 0)) {
           setMicIndicator("SPEECH", "var(--pass)");
         } else {
           setMicIndicator("silence", "var(--muted)");

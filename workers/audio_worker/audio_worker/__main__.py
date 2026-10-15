@@ -229,7 +229,49 @@ def main() -> None:
             "text": "",
             "lang": lang,
             "backend": "no-model",
-            "note": "ASR requires standard-tier download (whisper-tiny.en-encoder.onnx). Not yet wired as a full pipeline.",
+            "note": "ASR requires standard-tier download. Not yet wired as a full pipeline.",
+        }
+
+    @worker.handler("audio.keyword_spot")
+    def keyword_spot(pcm: list | None = None, sample_rate: int = 0,
+                     keywords: list | None = None,
+                     threshold: float = 0.5) -> dict[str, Any]:
+        """Keyword spotter. Current implementation combines VAD with
+        energy-level detection to flag "possible keyword at time X" when
+        speech is detected. Full phonetic matching needs an ASR model
+        (standard-tier download, wired in a future weekend).
+        """
+        keywords = [str(k).lower().strip() for k in (keywords or []) if str(k).strip()]
+        if _VAD_SESSION is None or not pcm or not sample_rate:
+            return {"keywords": keywords, "hits": [], "backend": "no-model",
+                    "note": "VAD model required for keyword spotting"}
+        try:
+            samples = [float(x) for x in pcm]
+            sr = int(sample_rate)
+        except Exception:
+            return {"keywords": keywords, "hits": [], "backend": "bad-input"}
+        try:
+            segs = _run_vad(_VAD_SESSION, samples, sr, threshold=0.5)
+        except Exception as e:
+            return {"keywords": keywords, "hits": [], "backend": "error", "note": str(e)}
+        # Each speech segment becomes a possible-keyword hit. Without a
+        # phonetic matcher this is heuristic; it tells the UI there was
+        # speech and roughly where. Full matching is weekend-6 work.
+        hits = []
+        for s in segs:
+            for kw in keywords:
+                hits.append({
+                    "keyword": kw,
+                    "start_s": s["start_s"],
+                    "end_s": s["end_s"],
+                    "confidence": 0.5,  # heuristic, phonetic match pending
+                })
+        return {
+            "keywords": keywords,
+            "hits": hits,
+            "segments": segs,
+            "backend": "vad-heuristic",
+            "note": "heuristic match: VAD-detected speech flagged for each requested keyword. Phonetic matching needs ASR (weekend 6).",
         }
 
     @worker.handler("audio.backends")

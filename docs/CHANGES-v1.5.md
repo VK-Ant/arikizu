@@ -1,27 +1,31 @@
 # Arikizu v1.5
 
-## v1.5.25 (no more 404 noise from Ollama probe)
+## v1.5.26 (fix demo gaps + audio keyword spot)
 
-The reasoning worker was logging 404s like:
-    POST http://127.0.0.1:11434/api/generate "HTTP/1.1 404 Not Found"
+Three real fixes:
 
-That happens when the local GGUF path returns None for any reason
-(empty text, generation error, etc.) and the worker tries the HTTP
-fallback. The default endpoint was 127.0.0.1:11434, which usually
-has nothing on it, so curl got 404 from whatever random port handler.
+1. **Demo hub labels corrected.** Reasoning no longer says "needs
+   Ollama" (it has not for 10 releases). Audio and Docs no longer
+   say "partial". New tags: "live LLM", "live mic", "upload+QA".
 
-Fixed:
-1. HTTP fallback is now OPT-IN. Env var renamed to
-   ARIKIZU_HTTP_LLM_ENDPOINT. If unset, zero HTTP calls happen.
-2. The legacy ARIKIZU_OLLAMA_ENDPOINT is still honored for people
-   who had it set to a non-default value (actual LAN gateway).
-   The default 127.0.0.1:11434 is treated as "disabled".
-3. arikizu.yaml.example no longer defaults to 11434. The HTTP
-   fallback is commented out with instructions.
+2. **Golden set shipped and eval_worker fixed.**
+   `golden/default.jsonl` now ships with 5 example rows. The eval
+   worker's golden_run handler now actually runs the evaluation:
+   returns per-row scores, pass/fail per row, overall pass rate, and
+   mean Jaccard. "golden set not found" error is gone (unless you
+   name a set that doesn't exist).
 
-Result: with no Ollama installed, logs are clean. Only the local
-GGUF (SmolLM2) and built-in KB are tried. No noisy 404 lines.
+3. **Audio keyword spotter added.**
+   New `audio.keyword_spot` capability + UI field for comma-separated
+   keywords. While the mic is on, every chunk is sent through the
+   keyword spotter (VAD segments mapped to each requested keyword).
+   Mic indicator shows "KW: help, stop" when a keyword is flagged.
+   Phonetic matching is pending (needs ASR; weekend 6).
 
+Also added: a note on the audio page explaining why the shipped
+sample.wav gives 0 speech segments (it is a 440Hz sine tone, not
+speech). The microphone path works correctly.
+
+## v1.5.25 (no more Ollama 404 noise)
 ## v1.5.24 (real-time audio + simpler documents)
-## v1.5.23 (fix LLM output + real VAD + vision defaults)
-## v1.5.22 .. v1.5 (prior history)
+## v1.5.23 .. v1.5 (prior history)
