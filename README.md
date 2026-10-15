@@ -335,46 +335,35 @@ arikizu/
 
 ---
 
-## Status
+## Roadmap
 
-v1.5 scaffold. All 9 Rust crates compile, all 10 Python workers run, dashboard
-and sandbox both served from one binary. Weekend 3 of 20.
+Current release wires up every worker, dashboard, and audit path end
+to end. Future weekends deepen specific capabilities with the
+Ant Intelligence libraries.
 
-**Live today:**
-- `cargo build` compiles the whole workspace
-- `arikizu run` loads YAML, spawns workers, serves HTTP + WebSocket
-- Operator dashboard at `/`, developer sandbox at `/demo/`
-- Supervisor <-> worker IPC proven by `test_worker` (CI integration test)
-- Pipeline executor walks stages, honors `feedback.approve` gates
-- SQLite audit log records every feedback event and pipeline run
-- Local event bus fans worker events out to the dashboard WebSocket
-- Reasoning worker talks to a local a local LLM server
-- Guard worker scans and redacts PII (regex-based v0.1 detectors)
+| When         | What                                                       |
+| ------------ | ---------------------------------------------------------- |
+| Weekend 5    | Full vision pipeline (SightRAG: segmentation, tracking)    |
+| Weekend 6    | Full audio pipeline (Sonarwise: speaker ID, embeddings)    |
+| Weekend 7    | Full document pipeline (DocQWise + Vellex layout parsing)  |
+| Weekend 8    | Long-range forecasting (WavqWise)                          |
+| Weekend 9    | Persistent memory (adaptive-intelligence)                  |
+| Weekend 10   | ML-based PII detectors (AntGuard)                          |
+| Weekend 12   | LLM-as-judge scoring (LLMEvalKit)                          |
+| Weekend 15   | Signed model manifest + apt feed + flashable Pi image      |
+| Weekend 20   | Full public release                                        |
 
-**Placeholder (brings in VK's library on the listed weekend):**
-- Vision: SightRAG (Weekend 5)
-- Audio: Sonarwise (Weekend 6)
-- Docs: DocQWise + Vellex (Weekend 7)
-- Time series: WavqWise (Weekend 8)
-- Memory: adaptive-intelligence (Weekend 9, partial today)
-- Guard: full AntGuard detectors (Weekend 10, partial today)
-- Eval: LLMEvalKit (Weekend 12, partial today)
-- Model manager pull + verify (Weekend 15)
-- cargo-dist release pipeline (Weekend 15)
-
-Non-fit list, five-point qualification, and eleven target verticals:
+Non-fit list, five-point qualification, and target verticals:
 [`docs/SPEC.md`](docs/SPEC.md).
 
 ---
 
 ## License
 
-TBD. v0.1 keeps the code private; Weekend 20 picks between Apache-2.0,
-MIT, and source-available before the first public release.
+Apache License 2.0. See [LICENSE](LICENSE).
 
-The Arikizu mark and logo (`docs/assets/logo.png`) are the Ant Intelligence
-brand. Code license will cover source files; brand assets stay the
-property of the project.
+Copyright 2026 Venkatkumar Rajan (VK-Ant). The Arikizu mark and logo
+(`docs/assets/logo.png`) remain the property of the project.
 
 ## Attribution
 
