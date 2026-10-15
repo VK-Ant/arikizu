@@ -62,8 +62,6 @@ check "Rust (rustc)"    1.80 rustc
 check "Rust (cargo)"    1.80 cargo
 check "Python 3.11"     3.11 python3
 check "uv"              0.4  uv
-check "Node.js 20"      20   node
-check "pnpm"            9    pnpm
 check "git"             2    git
 check "make"            3    make
 

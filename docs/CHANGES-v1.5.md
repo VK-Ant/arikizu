@@ -1,25 +1,27 @@
 # Arikizu v1.5
 
-## v1.5.10 (zero CI, clearer prereqs, device-neutral framing)
+## v1.5.12 (local LLM out of the box)
 
-Three cleanups based on repo visibility:
+Reasoning now works defaultly without installing anything else:
 
-1. Removed security.yml workflow entirely. All CI gone; cargo-audit was
-   failing on scaffolded placeholder code and nothing good comes from
-   red X on a repo page at Weekend 3. Kept dependabot.yml (config
-   only, no checks fire).
+1. `scripts/download-default-models.sh --tier standard` adds a 400 MB
+   small instruct LLM in GGUF format to `models/`. Standard tier is
+   now the recommended default.
+2. `workers/reasoning_worker/pyproject.toml` adds `llama-cpp-python` as
+   a regular dependency; pre-built wheels exist for Linux x86_64,
+   aarch64, and macOS so `scripts/bootstrap.sh` installs it without
+   extra work.
+3. `arikizu.yaml.example` sets `ARIKIZU_REASONING_GGUF` to point at the
+   downloaded file by default. Worker auto-detects it on startup.
 
-2. README prereqs are now a dedicated section with exact install
-   commands for Rust, uv, system packages (per platform), and swap
-   (if under 4 GB RAM). Was one line; now the four tools people need
-   are each callable in one copy-paste block.
+Fallback chain is still: local GGUF -> HTTP endpoint -> demo mode.
+Nothing crashes if any layer is missing.
 
-3. New "Where it runs" table in README names all five supported
-   device families (Jetson Orin Nano / AGX, Mac Apple Silicon / Intel,
-   Linux x86_64, Pi 4/5, Windows via WSL2). Added a one-liner that
-   the current demo targets Pi only because that is the hardware I
-   have in hand; the binary itself runs on any of them.
+For users on minimum tier (no LLM downloaded): reasoning shows the
+friendly demo-mode message from v1.5.11.
 
+## v1.5.11 (reasoning worker fallback)
+## v1.5.10 (zero CI, clearer prereqs)
 ## v1.5.9 (ready to publish)
 ## v1.5.8 (generic model names in prose)
 ## v1.5.7 (humanized docs)

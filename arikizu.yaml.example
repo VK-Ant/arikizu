@@ -41,8 +41,14 @@ workers:
     args: [run, --package, reasoning-worker, python, -m, reasoning_worker]
     cwd: ./workers
     env:
-      ARIKIZU_REASONING_MODEL: qwen2.5:3b-instruct-q4_K_M
+      # Preferred: local GGUF model loaded directly via llama-cpp-python.
+      # Downloaded by scripts/download-default-models.sh --tier standard.
+      ARIKIZU_REASONING_GGUF: ./models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      # Fallback: HTTP endpoint (local LLM runtime, LAN gateway, cloud).
+      # If both the local file and this endpoint are missing, the worker
+      # returns a friendly demo-mode response rather than an error.
       ARIKIZU_OLLAMA_ENDPOINT: http://127.0.0.1:11434
+      ARIKIZU_REASONING_MODEL: qwen2.5:0.5b
   - name: guard
     python: uv
     module: guard_worker

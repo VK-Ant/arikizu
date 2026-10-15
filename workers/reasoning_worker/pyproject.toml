@@ -1,11 +1,15 @@
 [project]
 name = "reasoning-worker"
 version = "0.0.1"
-description = "Arikizu reasoning worker; local LLM via Ollama (or compatible endpoint)"
+description = "Arikizu reasoning worker; local GGUF model, LAN gateway, or demo mode"
 requires-python = ">=3.11"
 dependencies = [
     "arikizu-worker-sdk",
     "httpx>=0.27.0",
+    # Local GGUF inference. Pre-built wheels for Linux x86_64, aarch64,
+    # and macOS. If the wheel does not install for the host, reasoning
+    # falls back to the HTTP backend or demo mode without crashing.
+    "llama-cpp-python>=0.2.90",
 ]
 
 [project.scripts]

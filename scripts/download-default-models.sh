@@ -178,6 +178,14 @@ if [ "$TIER" = "standard" ] || [ "$TIER" = "full" ]; then
         "mobile_sam.onnx" \
         "" && \
         write_manifest "mobile_sam.onnx" "MobileSAM lightweight segmentation" "onnx" "Apache-2.0"
+
+    echo
+    echo "reasoning (small local LLM, ~400 MB):"
+    fetch \
+        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf" \
+        "qwen2.5-0.5b-instruct-q4_k_m.gguf" \
+        "" && \
+        write_manifest "qwen2.5-0.5b-instruct-q4_k_m.gguf" "Small instruct LLM (Q4 quantized)" "llama-cpp" "Apache-2.0"
 fi
 
 # ---------------------------------------------------------------------------
