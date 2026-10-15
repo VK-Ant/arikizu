@@ -5,7 +5,7 @@ Backend auto-selection, in order:
   1. Local GGUF model via llama-cpp-python when
      ARIKIZU_REASONING_GGUF points to a readable file.
   2. HTTP endpoint (local LLM runtime, LAN gateway, or OpenAI-compatible
-     cloud API) when the socket at ARIKIZU_OLLAMA_ENDPOINT answers.
+     cloud API) when the socket at ARIKIZU_HTTP_LLM_ENDPOINT answers (opt-in only).
   3. Demo-mode fallback: the chat UI still works and returns a short
      canned message explaining how to enable real reasoning.
 
@@ -35,19 +35,29 @@ def _auto_discover_gguf() -> str:
     return ""
 
 
-OLLAMA_ENDPOINT = os.environ.get("ARIKIZU_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
+# HTTP fallback (local LLM runtime) is OPT-IN. The default 127.0.0.1:11434
+# probe caused noisy 404 lines when the port had something unrelated on
+# it. Only call HTTP when the user explicitly sets a non-empty endpoint
+# via ARIKIZU_HTTP_LLM_ENDPOINT.
+HTTP_LLM_ENDPOINT = os.environ.get("ARIKIZU_HTTP_LLM_ENDPOINT", "")
+# Legacy env var: still honored, but only if the user set it to something
+# other than the ignored default. Empty = HTTP disabled.
+if not HTTP_LLM_ENDPOINT:
+    legacy = os.environ.get("ARIKIZU_OLLAMA_ENDPOINT", "")
+    if legacy and legacy != "http://127.0.0.1:11434":
+        HTTP_LLM_ENDPOINT = legacy
 MODEL = os.environ.get("ARIKIZU_REASONING_MODEL", "smollm2-360m")
 API_KEY = os.environ.get("ARIKIZU_API_KEY", "")
 GGUF_PATH = os.environ.get("ARIKIZU_REASONING_GGUF", "") or _auto_discover_gguf()
 
 # OpenAI-compatible endpoints use /v1/chat/completions; the local runtime's
 # native API uses /api/generate. Pick based on the URL shape.
-USE_OPENAI_SHAPE = (
-    "openai" in OLLAMA_ENDPOINT.lower()
-    or "/v1" in OLLAMA_ENDPOINT
-    or "groq" in OLLAMA_ENDPOINT.lower()
-    or "deepinfra" in OLLAMA_ENDPOINT.lower()
-    or "together" in OLLAMA_ENDPOINT.lower()
+USE_OPENAI_SHAPE = HTTP_LLM_ENDPOINT and (
+    "openai" in HTTP_LLM_ENDPOINT.lower()
+    or "/v1" in HTTP_LLM_ENDPOINT
+    or "groq" in HTTP_LLM_ENDPOINT.lower()
+    or "deepinfra" in HTTP_LLM_ENDPOINT.lower()
+    or "together" in HTTP_LLM_ENDPOINT.lower()
 )
 
 # Lazy local-model handle; populated on first successful load.
@@ -160,7 +170,7 @@ def _builtin_response(question: str) -> str:
         f"I am the Arikizu reasoning worker in built-in mode. For your question "
         f"({q!r}) I have no canned answer. For real LLM responses, point "
         f"ARIKIZU_REASONING_GGUF at a local GGUF file (any size), set "
-        f"ARIKIZU_OLLAMA_ENDPOINT to a running LLM runtime, or try asking a "
+        f"ARIKIZU_HTTP_LLM_ENDPOINT to a running LLM runtime URL, or try asking a "
         f"question about Arikizu itself: what it is, how to install it, how a "
         f"specific worker works."
     )
@@ -194,31 +204,50 @@ def _try_load_local() -> Any:
 
 
 def _generate_local(prompt: str, max_tokens: int) -> str | None:
-    """Try the local GGUF model. Return text, or None if unavailable."""
+    """Try the local GGUF model with the SmolLM2 chat template."""
     llm = _try_load_local()
     if llm is None:
         return None
+    # SmolLM2 is tuned for the ChatML template. Wrapping the raw prompt
+    # with it is what prevents the "131313..." degenerate loops.
+    chatml = (
+        "<|im_start|>system\n"
+        "You are a helpful assistant. Answer the user's question concisely.\n"
+        "<|im_end|>\n"
+        "<|im_start|>user\n"
+        f"{prompt.strip()}\n"
+        "<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
     try:
         out = llm(
-            prompt,
+            chatml,
             max_tokens=max_tokens,
-            temperature=0.4,
-            stop=["</s>", "<|im_end|>", "User:"],
+            temperature=0.3,
+            top_p=0.9,
+            repeat_penalty=1.15,
+            stop=["<|im_end|>", "<|im_start|>", "</s>"],
         )
-        return out["choices"][0]["text"].strip()
+        text = out["choices"][0]["text"].strip()
+        return text if text else None
     except Exception:
         return None
 
 
 async def _generate_http(prompt: str, max_tokens: int) -> str | None:
-    """Try the HTTP endpoint. Return text, or None on any failure."""
+    """Try the HTTP endpoint. Returns None instantly if nothing is
+    configured, so no network call is made. This stops the noisy 404
+    lines when there is no local LLM runtime on 11434."""
+    if not HTTP_LLM_ENDPOINT:
+        return None
+
     headers: dict[str, str] = {}
     if API_KEY:
         headers["Authorization"] = f"Bearer {API_KEY}"
 
     try:
         if USE_OPENAI_SHAPE:
-            base = OLLAMA_ENDPOINT.rstrip("/")
+            base = HTTP_LLM_ENDPOINT.rstrip("/")
             if not base.endswith("/v1"):
                 base = f"{base}/v1"
             url = f"{base}/chat/completions"
@@ -234,7 +263,7 @@ async def _generate_http(prompt: str, max_tokens: int) -> str | None:
                 data = r.json()
             return data["choices"][0]["message"]["content"]
 
-        url = f"{OLLAMA_ENDPOINT}/api/generate"
+        url = f"{HTTP_LLM_ENDPOINT}/api/generate"
         body = {
             "model": MODEL,
             "prompt": prompt,
@@ -280,7 +309,7 @@ def main() -> None:
         "reasoning backends: gguf_path=%r gguf_exists=%s llama_cpp_installed=%s "
         "http_endpoint=%s model=%s",
         GGUF_PATH or "(unset)", gguf_exists, llama_cpp_installed,
-        OLLAMA_ENDPOINT, MODEL,
+        HTTP_LLM_ENDPOINT or "(disabled)", MODEL,
     )
     if gguf_exists and llama_cpp_installed:
         logger.info("reasoning: will use local-gguf backend on first call")

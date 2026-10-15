@@ -33,19 +33,24 @@
 <body>
 <header><h1 style="margin:0;font-size:20px">Arikizu Docs</h1></header>
 <main>
-  <div class="ctl">
-    <label>file path:</label>
-    <input id="path" value="demo/fixtures/sample.txt" style="min-width:260px">
-    <button id="extract">Extract</button>
-    <label style="margin-left:12px">or upload:</label>
-    <input id="file" type="file" accept=".txt,.md,.log,.json,.csv,.pdf,.docx" style="color:var(--muted);font-size:12px">
+  <div class="box">
+    <h3 style="font-size:14px;color:var(--fg);margin:0 0 12px">1. Upload a document</h3>
+    <input id="file" type="file" accept=".txt,.md,.log,.json,.csv,.pdf" style="color:var(--muted);font-size:13px">
+    <div id="file-status" style="margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted)">no file selected (will use demo/fixtures/sample.txt)</div>
+    <input id="path" type="hidden" value="demo/fixtures/sample.txt">
   </div>
   <div class="box">
-    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px">Or ask a question (SLM-based QA)</h3>
-    <input id="question" placeholder="e.g. what defects were observed?" style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:5px 8px;width:60%">
-    <button id="ask">Ask</button>
-    <div id="answer" style="margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--muted)"></div>
+    <h3 style="font-size:14px;color:var(--fg);margin:0 0 12px">2. Ask a question about the document</h3>
+    <input id="question" placeholder="e.g. what is the invoice number? what is the due date?" style="font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;width:70%">
+    <button id="ask" style="font-size:14px;padding:8px 20px">Ask</button>
+    <div id="answer" style="margin-top:14px;font-family:var(--sans);font-size:14px;color:var(--muted);min-height:40px"></div>
   </div>
+  <details style="margin-top:16px">
+    <summary style="color:var(--muted);cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.08em">Advanced: schema-based extract (for structured docs)</summary>
+    <div style="margin-top:12px">
+      <button id="extract">Extract fields with schema</button>
+    </div>
+  </details>
   <div class="box">
     <h3>Schema (JSON)</h3>
     <textarea id="schema">{
@@ -108,6 +113,12 @@ async function readPdfText(file) {
   }
   return texts.join("\n");
 }
+document.getElementById("file").addEventListener("change", () => {
+  const f = document.getElementById("file").files[0];
+  const s = document.getElementById("file-status");
+  if (f) s.textContent = "selected: " + f.name + " (" + Math.round(f.size/1024) + " KB)";
+  else s.textContent = "no file selected (will use demo/fixtures/sample.txt)";
+});
 async function readUpload() {
   const fileEl = document.getElementById("file");
   const f = fileEl && fileEl.files && fileEl.files[0];

@@ -1,39 +1,27 @@
 # Arikizu v1.5
 
-## v1.5.22 (real inference + zero-config auto-discovery)
+## v1.5.25 (no more 404 noise from Ollama probe)
 
-Two real fixes so the demo works without yaml editing.
+The reasoning worker was logging 404s like:
+    POST http://127.0.0.1:11434/api/generate "HTTP/1.1 404 Not Found"
 
-1. **Real YOLOv8 inference in vision worker.** The detect handler
-   previously loaded the model but returned empty detections. Now:
-   - Decodes browser frame (base64) or reads image from disk
-   - Letterboxes to 640x640, normalizes, runs onnxruntime inference
-   - Postprocesses with NMS, maps 80 COCO class ids to names
-   - Returns real {class, score, bbox} per detected object
-   Includes CUDA / CoreML / CPU provider auto-selection. Boxes
-   drawn on the webcam are now actual detections, not canned.
+That happens when the local GGUF path returns None for any reason
+(empty text, generation error, etc.) and the worker tries the HTTP
+fallback. The default endpoint was 127.0.0.1:11434, which usually
+has nothing on it, so curl got 404 from whatever random port handler.
 
-2. **Workers auto-discover models in ./models/.** No yaml edit needed:
-   - vision_worker picks the first .onnx (prefers yolov8n.onnx)
-   - reasoning_worker picks the first .gguf
-   - audio_worker already auto-discovers silero_vad.onnx
-   Drop any ONNX / GGUF file in models/, restart make run, done.
-   Set ARIKIZU_VISION_MODEL / ARIKIZU_REASONING_GGUF to override.
+Fixed:
+1. HTTP fallback is now OPT-IN. Env var renamed to
+   ARIKIZU_HTTP_LLM_ENDPOINT. If unset, zero HTTP calls happen.
+2. The legacy ARIKIZU_OLLAMA_ENDPOINT is still honored for people
+   who had it set to a non-default value (actual LAN gateway).
+   The default 127.0.0.1:11434 is treated as "disabled".
+3. arikizu.yaml.example no longer defaults to 11434. The HTTP
+   fallback is commented out with instructions.
 
-The minimum demo is now 4 commands with zero yaml editing:
+Result: with no Ollama installed, logs are clean. Only the local
+GGUF (SmolLM2) and built-in KB are tried. No noisy 404 lines.
 
-```
-scripts/bootstrap.sh
-scripts/download-default-models.sh --tier minimum
-make build
-make run
-```
-
-Open http://localhost:7000/. Click vision webcam, you see real
-YOLOv8 detections. Click reasoning, you get real SmolLM2 answers.
-Click documents, you get real SLM-based extraction and Q&A.
-
-## v1.5.21 (no fake boxes, PDF upload, document Q&A)
-## v1.5.20 (docs extraction via SLM)
-## v1.5.19 (live dashboard + visible backend)
-## v1.5.18 .. v1.5 (prior history)
+## v1.5.24 (real-time audio + simpler documents)
+## v1.5.23 (fix LLM output + real VAD + vision defaults)
+## v1.5.22 .. v1.5 (prior history)

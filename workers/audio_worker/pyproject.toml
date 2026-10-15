@@ -6,6 +6,8 @@ requires-python = ">=3.11,<3.14"
 dependencies = [
     "arikizu-worker-sdk",
     "numpy>=1.26.0",
+    "onnxruntime>=1.18.0",
+    "numpy>=1.26.0",
     "soundfile>=0.12.1",
     # "sonarwise>=0.1.0",  # bring in on Weekend 6
 ]

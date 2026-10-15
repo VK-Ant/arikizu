@@ -41,13 +41,15 @@ workers:
     args: [run, --package, reasoning-worker, python, -m, reasoning_worker]
     cwd: ./workers
     env:
-      # Preferred: local GGUF model loaded via llama-cpp-python.
-      # Downloaded by scripts/download-default-models.sh at minimum tier.
-      # Switch to qwen2.5-0.5b-instruct-q4_k_m.gguf for better quality.
-      ARIKIZU_REASONING_GGUF: ./models/smollm2-360m-instruct-q4_k_m.gguf
-      # Optional HTTP endpoint fallback (local LLM runtime, LAN, cloud).
-      ARIKIZU_OLLAMA_ENDPOINT: http://127.0.0.1:11434
+      # Workers auto-discover a .gguf file in ./models/, so this env var
+      # is only needed if you want a specific one. Default: first .gguf
+      # found.
+      # ARIKIZU_REASONING_GGUF: ./models/smollm2-360m-instruct-q4_k_m.gguf
       ARIKIZU_REASONING_MODEL: smollm2-360m
+      # Opt-in HTTP backend. Leave unset for pure-local operation
+      # (no 404 noise). Set to a reachable LLM runtime URL to enable:
+      #   ARIKIZU_HTTP_LLM_ENDPOINT: http://192.168.1.X:11434
+      #   ARIKIZU_HTTP_LLM_ENDPOINT: https://api.groq.com/openai
   - name: guard
     python: uv
     module: guard_worker

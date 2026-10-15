@@ -180,15 +180,24 @@ def _load_pil(image_path: str, image_base64: str) -> Image.Image | None:
             return Image.open(io.BytesIO(data)).convert("RGB")
         except Exception:
             return None
-    if image_path:
-        p = Path(image_path)
-        if not p.is_absolute():
-            p = Path.cwd() / p
+    if not image_path:
+        return None
+    # Try several locations because the worker's CWD may be workers/ when
+    # launched from arikizu.yaml, but paths like demo/fixtures/scene.jpg
+    # are relative to the repo root.
+    candidates = [Path(image_path)]
+    if not Path(image_path).is_absolute():
+        candidates += [
+            Path.cwd() / image_path,
+            Path.cwd() / ".." / image_path,
+            Path.cwd().parent / image_path,
+        ]
+    for p in candidates:
         if p.exists():
             try:
                 return Image.open(p).convert("RGB")
             except Exception:
-                return None
+                continue
     return None
 
 
