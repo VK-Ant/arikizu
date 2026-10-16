@@ -166,7 +166,8 @@ try_mirrors() {
     return 1
 }
 
-printf '%stier: %s%s  ->  %s\n\n' "$GREEN" "$TIER" "$RESET" "$MODELS_DIR"
+printf '%stier: %s%s  ->  %s\n' "$GREEN" "$TIER" "$RESET" "$MODELS_DIR"
+printf '%s(yolov8n.onnx and silero_vad.onnx ship pre-installed; this script is mostly for refreshing or adding the LLM GGUF)%s\n\n' "$GREY" "$RESET"
 
 printf 'vision:\n'
 # Try several mirrors in order. The HF repos sometimes return 401 for

@@ -1,5 +1,83 @@
 # Arikizu v1.5
 
+## v1.5.38 (one consistent header across all demo pages)
+
+VK's note: "all should be same background, add Arikizu logo on top,
+attractive and clean". Every demo page now shares the same header:
+Arikizu logo + name as a link back to the hub, breadcrumb separator,
+then the page name (Vision / Audio / Documents / Reasoning /
+Timeseries). Hovering the Arikizu name tints it accent orange so the
+breadcrumb-back action is obvious.
+
+- Softened the palette: dark background goes from `#15150f` (almost
+  black) to `#1a1a14` (warm charcoal), card from `#1f1f18` to
+  `#23231c`, border a shade warmer. Light-mode background a hair
+  warmer too. Same tokens on all six pages; no page is darker or
+  colder than another.
+- Header has a smaller logo (32px) and tighter padding so it doesn't
+  dominate on short pages.
+- Vision page's frames/fps/status moved to the right side of the
+  header via `margin-left: auto`, so the status row doesn't push the
+  main area down.
+- Reasoning page's "Local LLM via GGUF…" blurb condensed into a
+  single small line beside the title.
+
+## v1.5.37 (timeseries: upload your own sensor data)
+
+The timeseries demo was always-generated sine wave + injected spikes.
+Fine as a smoke test, pointless as a real demo. Added file upload so
+anyone can drop their own sensor log on the page and run forecast /
+anomaly against it.
+
+- File upload accepts .csv, .tsv, .txt, .json, .xls, .xlsx.
+- CSV / TSV: splits on comma / tab / semicolon, picks the first column
+  where >=80% of rows parse as finite numbers (so header rows and
+  timestamp columns are skipped automatically).
+- JSON: accepts a flat array of numbers, {series: [...]}, {data: [...]},
+  or an array of objects (first numeric field wins).
+- XLSX: SheetJS 0.18.5 is lazy-loaded from cdnjs only when the user
+  picks an Excel file.
+- `demo/fixtures/sensor_readings.csv` added — 96 rows of synthetic
+  temperature / pressure / vibration data with two injected anomaly
+  spikes at index 41 and 71, so there's always something to try the
+  upload with.
+- Timeseries card is back on the demo hub (5 cards instead of 4), now
+  that it accepts real data rather than only showing a sine.
+
+## v1.5.36 (audio page: drop the pointless file-based VAD)
+
+The shipped sample.wav is a 1-second sine tone, so "Run VAD on file"
+always reported 0 segments and audio.transcribe always reported
+(empty). Both PASS but neither showed anything useful. Removed.
+
+Audio page is now one flow: click "Use microphone", speak a keyword,
+indicator flips to KW: &lt;word&gt;. Live transcript shows what was
+heard. Waveform draws from the mic input while it's on.
+
+## v1.5.35 (models ship in the zip)
+
+VK's point was correct: a demo should not make the user hunt down model
+files from flaky HF mirrors. The vision and audio models are small
+(12 MB and 2.3 MB respectively), so they now ship pre-installed in
+`models/` with the release.
+
+**What's bundled:**
+
+- `models/yolov8n.onnx` (12 MB, AGPL-3.0, exported from ultralytics
+  v8.4.178, loads cleanly in plain onnxruntime)
+- `models/silero_vad.onnx` (2.3 MB, MIT, extracted from `silero-vad`
+  PyPI v6.2.3)
+- `models/NOTICE.md` explaining each model's source and license
+
+**Still downloaded on demand:**
+
+- SmolLM2 360M GGUF (258 MB — too big for a zip). Reasoning worker has
+  a built-in KB fallback so the demo runs without it.
+
+**On WSL:** unzip, `make build`, `make run`. The vision and audio
+demos work immediately. Diagnostics panel is READY on both without any
+download step.
+
 ## v1.5.34 (the actual bug: vision was loading Silero VAD)
 
 The traceback from the WSL run cracked it open:

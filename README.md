@@ -162,19 +162,28 @@ Full demo walkthrough with screenshots and expected outputs:
 
 ## Default models
 
-The scaffold ships with sensible defaults so demos work out of the box.
-`scripts/download-default-models.sh` fetches them to `./models/`:
+**yolov8n.onnx (12 MB) and silero_vad.onnx (2.3 MB) ship pre-installed
+in `models/`.** The vision and audio demos work the moment you run
+`make run` — no download step. See `models/NOTICE.md` for upstream
+licenses (YOLO is AGPL-3.0, Silero VAD is MIT).
 
-| Tier | Size | What |
-| ---------- | ------- | ----------------------------------------------------------------- |
-| `minimum` | ~8 MB | yolov8n (vision), silero_vad (audio activity detection) |
-| `standard` | ~400 MB | adds the ASR model (audio ASR), a text embedding model (text embeddings) |
-| `full` | ~2 GB | adds a small LLM (local reasoning), a time-series model (time series) |
+For the local LLM (reasoning), run the download script:
 
 ```
 scripts/download-default-models.sh --tier minimum
-# writes models/yolov8n.onnx, models/silero_vad.onnx
+# adds smollm2-360m-instruct-q4_k_m.gguf (258 MB)
 ```
+
+Reasoning falls back to a built-in Q&A knowledge base when the GGUF
+is absent, so the demo still runs without this.
+
+Higher tiers add ASR and embeddings:
+
+| Tier | Adds | Size |
+| ---------- | ----------------------------------------------------- | ------- |
+| `minimum` | SmolLM2 360M GGUF | 258 MB |
+| `standard` | Whisper tiny.en encoder, MiniLM-L6-v2 embedder, Qwen 2.5 0.5B | ~500 MB |
+| `full` | Table Transformer, YOLOv8s, Whisper small.en encoder | ~900 MB |
 
 Backends are auto-selected per device:
 

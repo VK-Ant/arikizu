@@ -7,21 +7,26 @@
   <title>Arikizu Vision Live</title>
   <style>
     :root {
-      --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
-      --card: #ffffff; --border: #e5e5e2; --pass: #2d8a4e; --fail: #b84040;
+      --bg: #faf9f4; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
+      --card: #ffffff; --border: #e8e6df; --pass: #2d8a4e; --fail: #b84040;
       --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       --sans: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #15150f; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
-              --card: #1f1f18; --border: #2a2a22; color-scheme: dark; }
+      :root { --bg: #1a1a14; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
+              --card: #23231c; --border: #2f2f26; color-scheme: dark; }
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; background: var(--bg); color: var(--fg);
                  font-family: var(--sans); font-size: 14px; line-height: 1.5; }
-    header { padding: 16px 24px; border-bottom: 1px solid var(--border);
-             background: var(--card); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    header h1 { margin: 0; font-size: 20px; }
+    .app-header { padding: 14px 24px; border-bottom: 1px solid var(--border);
+             background: var(--card); display: flex; gap: 12px; align-items: center; }
+    .app-header a.home { display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit; }
+    .app-header a.home:hover strong { color: var(--accent); }
+    .app-header img { width:32px; height:32px; object-fit:contain; }
+    .app-header strong { font-size:16px; letter-spacing:-0.01em; }
+    .app-header .sep { color: var(--muted); margin: 0 2px; }
+    .app-header .page { font-size: 15px; color: var(--muted); }
     main { padding: 24px; max-width: 1200px; margin: 0 auto; }
     .controls { background: var(--card); border: 1px solid var(--border);
                 border-radius: 6px; padding: 14px 18px; margin-bottom: 16px;
@@ -52,9 +57,11 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Arikizu Vision Live</h1>
-    <span class="fps">frames: <span id="count">0</span> &nbsp;·&nbsp; fps: <span id="fps">0</span> &nbsp;·&nbsp; status: <span id="status">idle</span></span>
+  <header class="app-header">
+    <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
+    <span class="sep">/</span>
+    <span class="page">Vision</span>
+    <span class="fps" style="margin-left:auto">frames: <span id="count">0</span> &nbsp;·&nbsp; fps: <span id="fps">0</span> &nbsp;·&nbsp; <span id="status">idle</span></span>
   </header>
 
   <main>

@@ -6,15 +6,21 @@
 <link rel="icon" type="image/png" href="/demo/favicon.png">
   <title>Arikizu Timeseries</title>
   <style>
-    :root { --bg:#fafaf7; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
-            --border:#e5e5e2; --pass:#2d8a4e; --fail:#b84040;
+    :root { --bg:#faf9f4; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e8e6df; --pass:#2d8a4e; --fail:#b84040;
             --mono: ui-monospace, Menlo, Consolas, monospace;
             --sans: -apple-system, system-ui, Roboto, sans-serif; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg:#15150f; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a; --card:#1f1f18; --border:#2a2a22; color-scheme: dark; }
+      :root { --bg:#1a1a14; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a; --card:#23231c; --border:#2f2f26; color-scheme: dark; }
     }
     *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
-    header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card); }
+    .app-header { padding:14px 24px; border-bottom:1px solid var(--border); background:var(--card); display:flex; gap:12px; align-items:center; }
+    .app-header a.home { display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit; }
+    .app-header a.home:hover strong { color:var(--accent); }
+    .app-header img { width:32px; height:32px; object-fit:contain; }
+    .app-header strong { font-size:16px; letter-spacing:-0.01em; }
+    .app-header .sep { color:var(--muted); margin:0 2px; }
+    .app-header .page { font-size:15px; color:var(--muted); }
     main { padding:24px; max-width:1100px; margin:0 auto; }
     .ctl { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:12px 18px;
            display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -33,9 +39,19 @@
   </style>
 </head>
 <body>
-  <header><h1 style="margin:0;font-size:20px">Arikizu Timeseries</h1></header>
+  <header class="app-header">
+    <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
+    <span class="sep">/</span>
+    <span class="page">Timeseries</span>
+  </header>
   <main>
     <div class="ctl">
+      <strong>Load your sensor data:</strong>
+      <input id="file" type="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" style="font-size:12px">
+      <span style="color:var(--muted);font-size:12px">CSV, TSV, JSON, or Excel. First numeric column is used.</span>
+    </div>
+    <div class="ctl" style="margin-top:12px">
+      <strong>Or generate a sample:</strong>
       <label>points:</label>
       <input id="n" type="number" value="120" style="width:70px">
       <label>period:</label>
@@ -44,9 +60,13 @@
       <input id="amp" type="number" value="10" style="width:60px">
       <label>anomaly indices (comma):</label>
       <input id="anoms" type="text" value="42,72,95" style="min-width:140px">
-      <button id="gen">Generate</button>
-      <button id="forecast" class="sec">Forecast</button>
-      <button id="detect" class="sec">Detect anomaly</button>
+      <button id="gen" class="sec">Generate</button>
+    </div>
+    <div class="ctl" style="margin-top:12px">
+      <strong>Analyze:</strong>
+      <button id="forecast">Forecast</button>
+      <button id="detect">Detect anomaly</button>
+      <span id="src-label" style="color:var(--muted);font-size:12px;margin-left:12px">source: generated sine wave</span>
     </div>
 
     <div class="viz">
@@ -146,7 +166,126 @@ function draw() {
   }
 }
 
-document.getElementById("gen").onclick = makeSine;
+document.getElementById("gen").onclick = () => {
+  document.getElementById("src-label").textContent = "source: generated sine wave";
+  makeSine();
+};
+
+// --- File upload (CSV / TSV / JSON / XLSX) ---
+// Pulls one numeric column out of the uploaded file and sets it as the
+// current series. Industrial sensor logs vary a lot in shape; the
+// heuristic is: skip header rows that are non-numeric, split lines on
+// comma/tab/semicolon, and take the first column whose values parse as
+// numbers. For Excel, sheetjs is lazy-loaded from a pinned CDN only
+// when the user actually picks an xlsx file.
+
+function parseCSVText(text) {
+  // Split lines, then tokens. Supports comma, tab, semicolon.
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  const rows = lines.map(l => l.split(/[,\t;]/));
+  if (!rows.length) return [];
+  // Pick first column where >=80% of rows parse as finite numbers.
+  const nCols = Math.max(...rows.map(r => r.length));
+  for (let c = 0; c < nCols; c++) {
+    const vals = [], numeric = [];
+    for (const r of rows) {
+      const raw = (r[c] || "").trim();
+      const v = parseFloat(raw);
+      if (!isNaN(v) && isFinite(v)) {
+        numeric.push(v);
+      } else if (raw !== "") {
+        vals.push(null);
+      }
+      vals.push(raw);
+    }
+    if (numeric.length >= 0.8 * lines.length && numeric.length >= 3) {
+      return numeric;
+    }
+  }
+  return [];
+}
+
+function parseJSON(text) {
+  let obj;
+  try { obj = JSON.parse(text); } catch { return []; }
+  // Shapes we accept: [n, n, n], {series: [...]}, {data: [...]}, [{value: n},...]
+  if (Array.isArray(obj) && obj.length && typeof obj[0] === "number") return obj.filter(x => isFinite(x));
+  if (Array.isArray(obj) && obj.length && typeof obj[0] === "object") {
+    const keys = Object.keys(obj[0]);
+    for (const k of keys) {
+      const vals = obj.map(r => parseFloat(r[k])).filter(x => !isNaN(x) && isFinite(x));
+      if (vals.length >= 3) return vals;
+    }
+  }
+  if (obj && Array.isArray(obj.series)) return obj.series.filter(x => typeof x === "number" && isFinite(x));
+  if (obj && Array.isArray(obj.data))   return obj.data.filter(x => typeof x === "number" && isFinite(x));
+  return [];
+}
+
+async function parseXLSX(file) {
+  // Lazy-load sheetjs on first use. Pinned to an exact cdnjs version
+  // so it can't break under us. If the user is offline for the demo
+  // and has never loaded the page before, this will fail; CSV export
+  // from Excel is the recommended fallback.
+  if (!window.XLSX) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = res;
+      s.onerror = () => rej(new Error("could not load sheetjs; try CSV instead"));
+      document.head.appendChild(s);
+    });
+  }
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, {type: "array"});
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  // Dump to AoA, re-use the CSV numeric-column picker
+  const aoa = window.XLSX.utils.sheet_to_json(sheet, {header: 1});
+  const nCols = Math.max(...aoa.map(r => r.length));
+  for (let c = 0; c < nCols; c++) {
+    const numeric = [];
+    for (const r of aoa) {
+      const v = parseFloat(r[c]);
+      if (!isNaN(v) && isFinite(v)) numeric.push(v);
+    }
+    if (numeric.length >= 0.8 * aoa.length && numeric.length >= 3) return numeric;
+  }
+  return [];
+}
+
+document.getElementById("file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const label = document.getElementById("src-label");
+  label.textContent = `source: loading ${file.name}...`;
+  label.style.color = "var(--muted)";
+  try {
+    let parsed = [];
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext === "xlsx" || ext === "xls") {
+      parsed = await parseXLSX(file);
+    } else if (ext === "json") {
+      parsed = parseJSON(await file.text());
+    } else {
+      parsed = parseCSVText(await file.text());
+    }
+    if (!parsed.length) {
+      label.textContent = `source: ${file.name} - no numeric column found`;
+      label.style.color = "var(--fail)";
+      return;
+    }
+    series = parsed;
+    forecast = []; anomalies = [];
+    document.getElementById("meta").innerHTML =
+      `<span class="tag">LOADED</span> ${parsed.length} points from ${file.name}`;
+    label.textContent = `source: ${file.name} (${parsed.length} points)`;
+    label.style.color = "var(--pass)";
+    draw();
+  } catch (err) {
+    label.textContent = `source: parse failed - ${err.message}`;
+    label.style.color = "var(--fail)";
+  }
+});
 
 document.getElementById("forecast").onclick = async () => {
   if (!series.length) return;

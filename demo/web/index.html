@@ -7,16 +7,16 @@
   <title>Arikizu — localhost</title>
   <style>
     :root {
-      --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
-      --card: #ffffff; --border: #e5e5e2;
+      --bg: #faf9f4; --fg: #1a1a1a; --muted: #6b6b6b; --accent: #c75c2a;
+      --card: #ffffff; --border: #e8e6df;
       --pass: #2d8a4e; --wait: #c89520; --fail: #b84040;
       --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       --sans: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme='light']) {
-        --bg: #15150f; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
-        --card: #1f1f18; --border: #2a2a22; color-scheme: dark;
+        --bg: #1a1a14; --fg: #f0f0ec; --muted: #9b9b96; --accent: #e07a4a;
+        --card: #23231c; --border: #2f2f26; color-scheme: dark;
       }
     }
     * { box-sizing: border-box; }
@@ -107,6 +107,11 @@
         <h3>Reasoning <span class="badge">local LLM</span></h3>
         <p>Chat with the local small language model (SmolLM2-360M via llama-cpp). No cloud, no API key.</p>
         <span class="pill">reasoning.answer</span>
+      </a>
+      <a class="card" href="/demo/timeseries_view.html">
+        <h3>Timeseries <span class="badge">sensor data</span></h3>
+        <p>Upload a CSV, TSV, JSON, or Excel file of sensor readings. Forecast the next window and flag anomalies against your own data.</p>
+        <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
       </a>
     </div>
 
