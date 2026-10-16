@@ -328,29 +328,61 @@ Full architecture reference: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (als
 
 ## Architecture at a glance
 
-```
- Browser UI (operator dashboard + dev sandbox)
- |
- v
- +------------+------------+
- | HTTP / WebSocket API | ant-http
- +------------+------------+
- |
- v
- +------------------------+------------------------+
- | Supervisor + Capability Router | ant-supervisor + ant-router
- +---+--------+--------+--------+--------+---------+
- | | | | |
- v v v v v
- vision audio docs reason feedback (Python workers over Unix socket)
+```mermaid
+flowchart TB
+    subgraph INTERACTION[" Interaction "]
+        direction LR
+        UI["Browser UI<br/>operator dashboard + dev sandbox"]
+        CLI["CLI<br/>arikizu run"]
+    end
+
+    HTTP["<b>HTTP / WebSocket API</b><br/>ant-http · audit log · approval queue"]
+
+    SUP["<b>Supervisor + Capability Router</b><br/>ant-supervisor · ant-router · policy"]
+
+    subgraph WORKERS[" Python workers (Unix socket) "]
+        direction LR
+        W1["Vision<br/>SightRAG"]
+        W2["Audio<br/>Sonarwise"]
+        W3["Documents<br/>DocQWise"]
+        W4["Reasoning<br/>local LLM"]
+        W5["Timeseries<br/>WavqWise"]
+        W6["Guard<br/>AntGuard"]
+    end
+
+    FB["<b>Feedback Manager</b><br/>audit · approvals · golden set"]
+
+    UI --> HTTP
+    CLI --> HTTP
+    HTTP --> SUP
+    SUP --> W1
+    SUP --> W2
+    SUP --> W3
+    SUP --> W4
+    SUP --> W5
+    SUP --> W6
+    SUP <--> FB
+    HTTP <--> FB
+
+    classDef zone fill:transparent,stroke:#c75c2a,stroke-width:1px,color:#c75c2a
+    classDef runtime fill:#1f1f18,stroke:#c75c2a,stroke-width:2px,color:#f0f0ec
+    classDef worker fill:#1a1a14,stroke:#4a4a3e,stroke-width:1px,color:#f0f0ec
+    classDef trust fill:#1a1a14,stroke:#2d8a4e,stroke-width:2px,color:#f0f0ec
+    classDef interact fill:#1a1a14,stroke:#4a4a3e,stroke-width:1px,color:#f0f0ec
+
+    class INTERACTION,WORKERS zone
+    class UI,CLI interact
+    class HTTP,SUP runtime
+    class W1,W2,W3,W4,W5,W6 worker
+    class FB trust
 ```
 
 Four zones:
 
-- **Interaction**: HTTP, dashboard, CLI, voice input
-- **Runtime**: supervisor, router, worker lifecycle, policy enforcement
-- **Intelligence**: the Ant Intelligence libraries wrapped as workers
-- **Trust**: feedback manager, audit log, approval queue, golden set
+- **Interaction** — HTTP, dashboard, CLI, voice input
+- **Runtime** — supervisor, router, worker lifecycle, policy enforcement
+- **Intelligence** — the Ant Intelligence libraries wrapped as workers
+- **Trust** — feedback manager, audit log, approval queue, golden set
 
 Feedback manager is a peer of the supervisor, not a subsystem. Every
 pipeline can insert an approval gate. Every call can be rated. Every

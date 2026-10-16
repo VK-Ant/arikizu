@@ -1,5 +1,24 @@
 # Arikizu v1.5
 
+## v1.5.40 (README architecture diagram: Mermaid instead of ASCII)
+
+The "Architecture at a glance" block in the README was ASCII art, which
+GitHub renders in a monospace code block and reads badly: boxes drift,
+pipes don't align, the four-zone shape is lost. Replaced it with a
+Mermaid flowchart that GitHub renders natively.
+
+- Four interaction entry points (UI, CLI) → HTTP → Supervisor → six
+  worker boxes (Vision/SightRAG, Audio/Sonarwise, Documents/DocQWise,
+  Reasoning/LLM, Timeseries/WavqWise, Guard/AntGuard).
+- Feedback Manager shown as a peer of Supervisor + HTTP (bidirectional
+  arrows), matching how it actually sits in the system.
+- Colored class defs: supervisor + HTTP in accent orange, workers in
+  neutral card color, feedback in trust green.
+- Verified by rendering the diagram with mermaid-cli: 208 KB SVG,
+  parses cleanly, syntax is portable to GitHub's renderer.
+- `docs/assets/architecture-glance.svg` saved as a fallback for
+  non-GitHub markdown viewers.
+
 ## v1.5.39 (customization guide)
 
 Scattered mentions of "how to swap a model" or "how to add a worker"

@@ -20,9 +20,17 @@ pnpm-debug.log*
 /ui/.svelte-kit
 /ui/build
 
-# Models and golden data (large; pulled on first run)
+# Models directory: ignore by default, but keep the small default
+# models that ship with the demo so a fresh git clone works out of
+# the box. Larger models (SmolLM2 GGUF, Whisper, etc.) are still
+# pulled on first run by scripts/download-default-models.sh.
 /models/*
 !/models/.gitkeep
+!/models/NOTICE.md
+!/models/yolov8n.onnx
+!/models/silero_vad.onnx
+!/models/*.onnx.json
+
 /golden/*
 !/golden/.gitkeep
 
