@@ -1,5 +1,29 @@
 # Arikizu v1.5
 
+## v1.5.39 (customization guide)
+
+Scattered mentions of "how to swap a model" or "how to add a worker"
+across ARCHITECTURE.md, MODELS.md, HOW_IT_RUNS.md, but no one page
+anyone would land on. Added `docs/CUSTOMIZE.md` as the single
+customization reference. Seven recipes, each one or two file edits:
+
+1. Swap a model (drop into models/ or set an env var)
+2. Add a capability (one TOML entry + one handler function)
+3. Add a new worker (scaffold from test_worker/, four steps)
+4. Rebrand the UI (replace logo.png, change --accent token)
+5. Add a demo page (copy any page, keep the shared header)
+6. Load your own data (upload, server path, camera/mic, LAN stream)
+7. Deploy on a device (Pi, Jetson, Mac, Linux, WSL)
+
+Plus a `Where things live` map at the end so a new contributor can
+find any file in one glance.
+
+- Linked from the README top-nav alongside Quickstart and
+  Architecture.
+- "Make it yours" section added to the README between the demo
+  walkthrough and default models sections, so a reader who skips the
+  top-nav still sees it.
+
 ## v1.5.38 (one consistent header across all demo pages)
 
 VK's note: "all should be same background, add Arikizu logo on top,

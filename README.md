@@ -11,6 +11,7 @@
 <p align="center">
  <a href="QUICKSTART.md">Quickstart</a> ·
  <a href="docs/DEMO.md">Demo walkthrough</a> ·
+ <a href="docs/CUSTOMIZE.md">Customize</a> ·
  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
  <a href="docs/MODELS.md">Models</a> ·
  <a href="docs/HOW_IT_RUNS.md">How it runs</a> ·
@@ -157,6 +158,23 @@ through the same path.
 
 Full demo walkthrough with screenshots and expected outputs:
 [`docs/DEMO.md`](docs/DEMO.md).
+
+---
+
+## Make it yours
+
+Everything you'd want to change is one file edit. The guide walks
+through each with concrete code snippets:
+
+- Swap a model (your ONNX / GGUF, or a bigger YOLO)
+- Add a new capability (`your.predict` → `/api/v1/call/your/predict`)
+- Add a new worker (wrap your own library as its own process)
+- Rebrand the UI (logo, name, colors — one CSS token controls the whole palette)
+- Add your own demo page (copy an existing page, call your capability)
+- Load your own data (file upload, server-side path, webcam / mic, LAN sensor stream)
+- Deploy on Pi / Jetson / Mac / Linux / WSL
+
+See [`docs/CUSTOMIZE.md`](docs/CUSTOMIZE.md).
 
 ---
 
