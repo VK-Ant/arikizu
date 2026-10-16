@@ -295,7 +295,12 @@ async function checkModel() {
     } else {
       dot.style.background = "var(--fail)";
       text.textContent = "no vision model loaded";
-      hint.innerHTML = 'fix: run <code style="background:var(--bg);padding:1px 6px;border-radius:3px">scripts/download-default-models.sh</code> then restart with <code style="background:var(--bg);padding:1px 6px;border-radius:3px">make run</code>';
+      const err = b.load_error || "";
+      if (err) {
+        hint.innerHTML = `<span style="color:var(--fail)">${err}</span>`;
+      } else {
+        hint.innerHTML = 'fix: run <code style="background:var(--bg);padding:1px 6px;border-radius:3px">scripts/download-default-models.sh</code> then restart with <code style="background:var(--bg);padding:1px 6px;border-radius:3px">make run</code>';
+      }
     }
   } catch (e) {
     document.getElementById("model-dot").style.background = "var(--fail)";

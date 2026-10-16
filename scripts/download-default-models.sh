@@ -71,8 +71,9 @@ fetch() {
     local url="$1" out="$2" expected_sha="${3:-}" dest="$MODELS_DIR/$2" tmp actual
     if [[ -f "$dest" ]]; then
         if (( FORCE )); then
-            printf '%s  !!  %s%s --force set; re-downloading\n' "$YELLOW" "$out" "$RESET"
-            rm -f "$dest"
+            printf '%s  !!  %s%s --force set; will replace once download succeeds\n' "$YELLOW" "$out" "$RESET"
+            # Do NOT rm the old file here. A failed download would leave
+            # the user with nothing. The rename at the end is atomic.
         elif [[ -n "$expected_sha" ]]; then
             actual="$(sha256_file "$dest")"
             if [[ "$actual" == "$expected_sha" ]]; then
@@ -140,25 +141,55 @@ fetch_and_manifest() {
     local url="$1" file="$2" desc="$3" backend="$4" license="$5" sha="${6:-}"
     if fetch "$url" "$file" "$sha"; then
         write_manifest "$file" "$desc" "$backend" "$license"
+        return 0
     else
         printf '%s  !!  skipping manifest for %s because download failed%s\n' "$YELLOW" "$file" "$RESET" >&2
         FAILURES=$((FAILURES + 1))
+        return 1
     fi
+}
+
+# Try several mirrors in order; stop on the first success. On any
+# success, the FAILURES counter is reverted since the asset is on disk.
+# Call shape:
+#   try_mirrors FILE DESC BACKEND LICENSE URL1 [URL2 URL3 ...]
+try_mirrors() {
+    local file="$1" desc="$2" backend="$3" license="$4"
+    shift 4
+    local url
+    for url in "$@"; do
+        if fetch_and_manifest "$url" "$file" "$desc" "$backend" "$license"; then
+            return 0
+        fi
+        printf '  --  trying next mirror...\n'
+    done
+    return 1
 }
 
 printf '%stier: %s%s  ->  %s\n\n' "$GREEN" "$TIER" "$RESET" "$MODELS_DIR"
 
 printf 'vision:\n'
-# Try two mirrors because the HF Kalray export has specialized ops that
-# some onnxruntime builds reject. The onnx-community export is a plain
-# CPU-friendly ONNX that loads cleanly on x86_64 and arm64.
-if ! fetch_and_manifest \
-    'https://huggingface.co/onnx-community/yolov8n/resolve/main/onnx/model.onnx' \
-    'yolov8n.onnx' 'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'; then
-  printf '  !!  onnx-community mirror failed; trying Kalray mirror...\n' >&2
-  fetch_and_manifest \
-      'https://huggingface.co/Kalray/yolov8/resolve/main/yolov8n.onnx' \
-      'yolov8n.onnx' 'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'
+# Try several mirrors in order. The HF repos sometimes return 401 for
+# missing files or move paths, so a single URL is fragile.
+VISION_URLS=(
+    'https://huggingface.co/ragavsachdeva/yolov8n-onnx/resolve/main/yolov8n.onnx'
+    'https://huggingface.co/pbcquoc/yolov8n/resolve/main/yolov8n.onnx'
+    'https://huggingface.co/Kalray/yolov8/resolve/main/yolov8n.onnx'
+)
+VISION_OK=0
+for url in "${VISION_URLS[@]}"; do
+    if fetch_and_manifest "$url" 'yolov8n.onnx' \
+            'Compact YOLOv8n object detector (ONNX)' 'onnx' 'AGPL-3.0'; then
+        VISION_OK=1
+        break
+    fi
+    printf '  !!  mirror failed; trying next...\n' >&2
+done
+if (( VISION_OK == 0 )); then
+    printf '%s  !!  all vision mirrors failed. Fallback: generate from PyTorch:\n' "$YELLOW"
+    printf '      python3 -m pip install ultralytics\n'
+    printf '      python3 scripts/export_yolo_onnx.py %s%s\n' "$MODELS_DIR" "$RESET"
+    FAILURES=$((FAILURES + 1))
 fi
 
 printf '\naudio (voice activity detection):\n'

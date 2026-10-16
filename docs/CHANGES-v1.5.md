@@ -1,5 +1,50 @@
 # Arikizu v1.5
 
+## v1.5.34 (the actual bug: vision was loading Silero VAD)
+
+The traceback from the WSL run cracked it open:
+
+```
+Required inputs (['state', 'sr']) are missing from input feed (['input']).
+File ".../vision_worker/__main__.py", line 336, in detect
+```
+
+`state` and `sr` are Silero VAD inputs. The vision worker was loading
+`silero_vad.onnx` and trying to run YOLO inference on it.
+
+**Root cause chain:**
+
+1. `--force` deleted the Kalray yolov8n.onnx on disk.
+2. The replacement URL (`onnx-community/yolov8n`) returned 401 — that
+   repo path does not exist on HF the way I guessed.
+3. The Kalray fallback was also attempted but may have failed too.
+4. yolov8n.onnx was then absent from models/.
+5. `_auto_discover_model` had a last-resort `glob("*.onnx")` that
+   returned the first ONNX file alphabetically: `silero_vad.onnx`.
+6. onnxruntime loaded that file. On the first vision.detect call it
+   demanded `state` and `sr` (VAD inputs) that the YOLO code never
+   provides.
+
+**Fixes:**
+
+- `_auto_discover_model` is now strict. It accepts only YOLO
+  filenames (`yolov8*.onnx`, `yolov5*.onnx`, `yolo.onnx`) and files
+  that start with `yolo`. If no YOLO file is present, it returns
+  empty and the banner says so plainly. It will never again load a
+  VAD file as a vision model.
+- Download script now tries three HF mirrors in sequence and prints
+  the exact fallback command when all three fail.
+- `scripts/export_yolo_onnx.py` added: uses the `ultralytics` PyPI
+  package to export a guaranteed-working ONNX locally. This is the
+  bulletproof path when HF mirrors are flaky:
+  ```
+  pip install ultralytics
+  python3 scripts/export_yolo_onnx.py
+  ```
+- Vision page banner now shows the actual `load_error` text instead
+  of a generic "run the download script" message, so a wrong-model
+  bug (if one ever recurs) is immediately visible.
+
 ## v1.5.33 (surface the real reason models don't load)
 
 User screenshot after v1.5.32: reasoning READY, vision + audio still

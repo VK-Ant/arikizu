@@ -72,13 +72,25 @@ def _resolve_models_dir(env_value: str) -> str:
 
 
 def _auto_discover_model(models_dir: str) -> str:
+    """Find a YOLO ONNX model in the models dir.
+
+    IMPORTANT: this is strict about filenames. There was a bug in
+    earlier versions where a last-resort glob("*.onnx") would pick
+    up silero_vad.onnx and hand it to the YOLO inference code, which
+    then crashed with 'Required inputs ["state", "sr"] are missing'
+    because Silero VAD takes totally different inputs. Only accept
+    files that are plausibly YOLO.
+    """
     p = Path(models_dir)
     if not p.exists():
         return ""
-    for candidate in ("yolov8n.onnx", "yolov8s.onnx", "yolov5n.onnx", "model.onnx"):
+    for candidate in ("yolov8n.onnx", "yolov8s.onnx", "yolov8m.onnx",
+                      "yolov5n.onnx", "yolov5s.onnx", "yolo.onnx"):
         if (p / candidate).exists():
             return str(p / candidate)
-    for f in sorted(p.glob("*.onnx")):
+    # Last-resort: a file whose name starts with 'yolo'. Still refuse
+    # anything else, even if it is the only .onnx present.
+    for f in sorted(p.glob("yolo*.onnx")):
         return str(f)
     return ""
 

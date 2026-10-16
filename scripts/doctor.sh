@@ -90,7 +90,7 @@ check_model() {
     fi
 }
 
-check_model "yolov8n.onnx"                       10 "vision detect/segment"   "scripts/download-default-models.sh"
+check_model "yolov8n.onnx"                       10 "vision detect/segment"   "scripts/download-default-models.sh    OR    pip install ultralytics && python3 scripts/export_yolo_onnx.py"
 check_model "silero_vad.onnx"                     1 "audio voice detection"   "scripts/download-default-models.sh"
 check_model "smollm2-360m-instruct-q4_k_m.gguf" 200 "reasoning (local LLM)"   "scripts/download-default-models.sh"
 
