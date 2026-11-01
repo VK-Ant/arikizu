@@ -1,5 +1,56 @@
 # Arikizu v1.7
 
+## v1.7.3 (fixes for the two things that catch everyone first time)
+
+VK's screenshots on WSL + RTX 5050 confirmed two real failure modes.
+Both have one-command fixes, now surfaced loudly in the README and the
+diagnostic tooling.
+
+**Problem 1: Video Studio shows "unknown / 0 people / 0 objects".**
+
+MediaPipe not installed. The diagnostic panel already said MISSING,
+but the fix command was buried. Now:
+
+- README has a prominent "Two things that catch everyone first time"
+  section at the top with copy-paste fixes.
+- `scripts/doctor.sh` for each MediaPipe-dependent model row now shows
+  the full `uv add` command inline, not just the download step.
+
+**Problem 2: Agent answers "Arikizu is video editing software".**
+
+SmolLM2-360M is a 360-million-parameter model: fine for canned Q&A,
+too small to follow a system prompt or emit structured tool calls.
+The default install uses it, so first-time Agent Studio users get
+hallucinations.
+
+- `scripts/download-reasoning-llm.sh` added: downloads
+  Qwen2.5-{0.5b,1.5b,3b,7b}-Instruct Q4_K_M from Qwen's canonical
+  Hugging Face repo. Default is 1.5B (~1 GB), the smallest size that
+  can reliably do agent chat with tool calling.
+- `reasoning_worker/_auto_discover_gguf()` now picks the BIGGEST
+  text-only instruct GGUF rather than first-alphabetical. If the user
+  downloads Qwen 1.5B alongside SmolLM2, Qwen wins automatically on
+  restart. Explicitly skips vision-mmproj GGUFs (Qwen2.5-VL mmproj
+  won't be mis-selected as a text LLM).
+- Agent Studio UI gets a reasoning-model indicator in the header. If
+  the current model is tiny (regex: 360m, 135m, smollm2), it shows an
+  orange "too small for agent chat" warning with a "how to upgrade"
+  link that pops the exact command.
+- Agent system prompts now prepend a short grounding paragraph about
+  what Arikizu IS and ISN'T. This stops small models from inventing
+  "Arikizu is video editing software" when the agent policy doesn't
+  cover the user's question.
+- `make doctor` gained an agent-reasoning-size check that warns if
+  only SmolLM2-360M is downloaded.
+
+Both fixes are visible and copy-pasteable. The honest story about
+agent model size (why 360M is not enough, what to use instead) is
+documented in the README troubleshooting block.
+
+Verified: 14/14 agent policy + tool-call tests still pass.
+Reasoning worker auto-selection picks the biggest instruct GGUF when
+multiple are present, correctly skipping mmproj files.
+
 ## v1.7.2 (explicit "how to run everything" + smoke-test coverage)
 
 Checkpoint pass: made the full-stack run story explicit in the README

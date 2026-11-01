@@ -148,6 +148,46 @@ missing model file; `scripts/download-default-models.sh` fixes that.
 
 ---
 
+## Two things that catch everyone first time
+
+### "Video Studio shows unknown / 0 objects / 0 people"
+
+The video stack is MISSING on the Diagnostics panel. MediaPipe isn't
+installed yet. One command fixes it:
+
+```bash
+cd workers
+uv add mediapipe --package video-worker
+cd ..
+scripts/download-video-models.sh
+pkill -f arikizu && make run
+```
+
+The webcam and video analysis should work immediately after restart.
+
+### "Agent Studio gives generic / wrong answers"
+
+The default reasoning model is SmolLM2-360M (230 MB). That is a 360-
+million-parameter model: enough for canned Q&A, too small to follow a
+system prompt or emit structured tool calls. The agent's answers will
+look generic or wrong.
+
+For Agent Studio to actually work, download a properly-sized LLM:
+
+```bash
+scripts/download-reasoning-llm.sh --size 1.5b     # Qwen2.5-1.5B ~1.0 GB
+pkill -f arikizu && make run
+```
+
+The reasoning worker auto-detects the bigger model on restart. The
+Agent Studio header shows which LLM is in use; if it says
+"too small for agent chat", that is the signal.
+
+Sizes available: `--size 0.5b` (400 MB), `1.5b` (1 GB, recommended),
+`3b` (2 GB), `7b` (4.4 GB). Pick what fits your device.
+
+---
+
 ## Enable the full stack (Video Studio + Agent Studio + MCP)
 
 The 5-minute quickstart runs the base workers (vision, audio, docs,

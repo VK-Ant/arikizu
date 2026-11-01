@@ -70,23 +70,37 @@ def _chat_turn(agent: agents.Agent, conversation_id: str,
     conv = agents.get_conversation(conversation_id)
     history = conv["turns"] if conv else []
 
-    # Build the effective system prompt. The agent's own prompt plus a
-    # footer describing which tools it may call and the output format for
-    # tool invocations.
+    # Build the effective system prompt. Three parts stacked:
+    #   1. Grounding paragraph about what Arikizu IS, so a small
+    #      reasoning model doesn't hallucinate "video editing software".
+    #   2. The agent's own system prompt.
+    #   3. Tool-call protocol + list of allowed capabilities.
     allowed = policy_mod.allowed_capabilities(agent.policy)
     tool_doc_lines = [f"- {cap}" for cap in sorted(allowed["auto"] + allowed["ask"])][:40]
     tool_doc = "\n".join(tool_doc_lines) if tool_doc_lines else "(no tools allowed)"
+
+    arikizu_grounding = (
+        "You are an agent inside Arikizu, an edge-first AI operating system that "
+        "runs on a single device. Arikizu is NOT a video editing tool and NOT a "
+        "cloud service. It is a Rust supervisor plus Python workers for vision, "
+        "audio, documents, reasoning, time series, memory, PII guard, custom "
+        "chat agents, and (new) multimodal video action search. Everything runs "
+        "locally with no cloud API calls. When a user asks 'what is Arikizu', "
+        "answer with that short definition."
+    )
     system = (
-        f"{agent.system_prompt}\n\n"
-        "You run inside Arikizu. You may call Arikizu capabilities when you need "
-        "them. To call a tool, emit a block exactly like:\n"
+        f"{arikizu_grounding}\n\n"
+        f"Your specific role: {agent.system_prompt}\n\n"
+        "You may call Arikizu capabilities when you need them. To call a tool, "
+        "emit a block exactly like:\n"
         '<tool_call>{"capability": "worker.operation", "payload": {...}}</tool_call>\n'
-        "Multiple tool calls are allowed per message. The system will run each "
-        "allowed tool and return its result. Capabilities you may call:\n"
+        "Multiple tool calls per message are allowed. Each allowed tool returns "
+        "its result as a TOOL line in the next turn. Capabilities you may call:\n"
         f"{tool_doc}\n\n"
         "Capabilities marked ASK require human approval before running; do not "
         "promise the user the result will be immediate. Capabilities not in the "
-        "list are DENIED; do not try to call them."
+        "list are DENIED; do not try to call them. If you cannot answer without "
+        "a tool and no suitable tool is allowed, say so plainly."
     )
 
     all_tool_results: list[dict] = []

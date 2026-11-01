@@ -39,20 +39,65 @@ def _project_root() -> str:
 
 
 def _auto_discover_gguf() -> str:
-    """Pick the first .gguf file in ./models/ so no yaml edit is needed.
-    Searches the project root's models/ dir regardless of worker CWD.
+    """Pick the best .gguf file in ./models/.
+
+    Strategy: prefer explicitly non-vision instruct models, then bigger
+    text-generation models over smaller ones. SmolLM2-360M is barely
+    enough for canned Q&A; for agent chat with tool calling, 1B+ is
+    the real minimum. If the user downloads a bigger GGUF, we use it
+    automatically.
+
+    Order of preference (first match wins):
+      1. Qwen2.5-7B / 3B / 1.5B / 0.5B Instruct GGUF (text-only)
+      2. Any file matching 'instruct' and >= 500 MB
+      3. Any other .gguf (SmolLM2-360M falls here)
     """
     root = _project_root()
     env_dir = os.environ.get("ARIKIZU_MODELS_DIR", "./models")
     candidates = [env_dir, os.path.join(root, env_dir), os.path.join(root, "models"),
                   "./models", "../models"]
+    collected: list[tuple[str, int, str]] = []   # (path, size_bytes, lower_name)
     for d in candidates:
         if not os.path.isdir(d):
             continue
-        files = sorted(f for f in os.listdir(d) if f.endswith(".gguf"))
-        if files:
-            return os.path.join(d, files[0])
-    return ""
+        for f in sorted(os.listdir(d)):
+            if not f.endswith(".gguf"):
+                continue
+            full = os.path.join(d, f)
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                continue
+            collected.append((full, size, f.lower()))
+        if collected:
+            break   # found a models dir with .gguf files
+
+    if not collected:
+        return ""
+
+    # Vision-mmproj GGUFs are NOT text-generation models; skip them.
+    text_only = [c for c in collected if "mmproj" not in c[2]]
+    if not text_only:
+        return collected[0][0]   # fallback
+
+    # Prefer Qwen2.5 Instruct in any size (but NOT -VL variants, which
+    # are vision-language and need a mmproj to run).
+    for prefer in ("qwen2.5-7b-instruct", "qwen2.5-3b-instruct",
+                   "qwen2.5-1.5b-instruct", "qwen2.5-0.5b-instruct"):
+        for p, _, name in text_only:
+            if prefer in name and "-vl-" not in name:
+                return p
+
+    # Prefer any 'instruct' model >= 500 MB
+    big_instruct = [(p, s, n) for p, s, n in text_only
+                    if "instruct" in n and s >= 500 * 1024 * 1024]
+    if big_instruct:
+        big_instruct.sort(key=lambda x: -x[1])
+        return big_instruct[0][0]
+
+    # Fallback: biggest text-only GGUF
+    text_only.sort(key=lambda x: -x[1])
+    return text_only[0][0]
 
 
 # HTTP fallback (local LLM runtime) is OPT-IN. The default 127.0.0.1:11434

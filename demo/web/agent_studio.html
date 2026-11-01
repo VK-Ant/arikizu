@@ -81,6 +81,7 @@
     <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
     <span class="sep">/</span>
     <span class="page">Agent Studio</span>
+    <span id="model-indicator" style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)"></span>
   </header>
 
   <main>
@@ -359,6 +360,40 @@ document.getElementById("msg").addEventListener("keydown", e => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage(); }
 });
 
+// Show which LLM is doing the agent reasoning. If it is too small for
+// agent chat with tool calling (e.g. SmolLM2-360M), warn the user with
+// the exact command to upgrade.
+async function loadModelIndicator() {
+  const el = document.getElementById("model-indicator");
+  try {
+    const r = await callCap("reasoning.backends");
+    const path = r.gguf_path || "(none)";
+    const file = path.split("/").pop();
+    const sizeHint = file.match(/[\d.]+[bm]/i)?.[0]?.toLowerCase() || "";
+    const tiny = /360m|135m|smollm2-?3?6?0?m/i.test(file);
+    if (tiny) {
+      el.innerHTML = `<span style="color:var(--wait)">reasoning: ${file} - too small for agent chat</span>` +
+                     ` <a href="#" id="upgrade-hint" style="color:var(--accent);margin-left:8px">how to upgrade</a>`;
+      document.getElementById("upgrade-hint").onclick = (e) => {
+        e.preventDefault();
+        alert("Run this in your Arikizu directory:\n\n" +
+              "scripts/download-reasoning-llm.sh --size 1.5b\n\n" +
+              "Then restart:\n" +
+              "pkill -f arikizu && make run\n\n" +
+              "This downloads Qwen2.5-1.5B-Instruct (~1 GB). The reasoning " +
+              "worker auto-detects the bigger model on restart.");
+      };
+    } else if (file && file !== "(none)") {
+      el.innerHTML = `<span style="color:var(--pass)">reasoning: ${file}</span>`;
+    } else {
+      el.innerHTML = `<span style="color:var(--fail)">reasoning: no LLM loaded</span>`;
+    }
+  } catch (e) {
+    el.textContent = "reasoning: offline";
+  }
+}
+
+loadModelIndicator();
 loadAgents();
 </script>
 </body>

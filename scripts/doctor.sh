@@ -94,9 +94,27 @@ check_model "yolov8n.onnx"                       10 "vision detect/segment"   "s
 check_model "silero_vad.onnx"                     1 "audio voice detection"   "scripts/download-default-models.sh"
 check_model "smollm2-360m-instruct-q4_k_m.gguf" 200 "reasoning (local LLM)"   "scripts/download-default-models.sh"
 # Video studio models (optional, worker falls back gracefully)
-check_model "efficientdet_lite0.tflite"           4 "video object detector"   "scripts/download-video-models.sh"
-check_model "pose_landmarker_lite.task"           5 "video pose landmarks"    "scripts/download-video-models.sh"
+check_model "efficientdet_lite0.tflite"           4 "video object detector"   "cd workers && uv add mediapipe --package video-worker ; cd .. ; scripts/download-video-models.sh"
+check_model "pose_landmarker_lite.task"           5 "video pose landmarks"    "cd workers && uv add mediapipe --package video-worker ; cd .. ; scripts/download-video-models.sh"
 check_model "segformer_b0_ade20k_512_int8.onnx"   4 "video scene parsing"     "scripts/download-video-models.sh"
+
+printf '\n%sagent chat (reasoning model size)%s\n' "$BOLD" "$RESET"
+# SmolLM2-360M is enough for Q&A but too small for agent tool calling.
+# For good Agent Studio behavior, you want 1.5B+.
+if [[ -f "$MODELS_DIR/smollm2-360m-instruct-q4_k_m.gguf" ]]; then
+    bigger_found=0
+    for pattern in qwen2.5-1.5b qwen2.5-3b qwen2.5-7b llama-3; do
+        if ls "$MODELS_DIR"/*"$pattern"*.gguf >/dev/null 2>&1; then
+            bigger_found=1; break
+        fi
+    done
+    if (( bigger_found == 1 )); then
+        ok "a 1.5B+ reasoning model is present (agents will use it)"
+    else
+        warn "only SmolLM2-360M is downloaded" \
+             "too small for agent chat; upgrade with: scripts/download-reasoning-llm.sh --size 1.5b"
+    fi
+fi
 
 printf '\n%sbuild artifact%s\n' "$BOLD" "$RESET"
 if [[ -x target/release/arikizu ]]; then

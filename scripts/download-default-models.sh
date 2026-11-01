@@ -199,6 +199,10 @@ fetch_and_manifest \
     'silero_vad.onnx' 'Silero voice activity detection' 'onnx' 'MIT'
 
 printf '\nreasoning (small instruct LLM):\n'
+# SmolLM2-360M (~230 MB) is the smallest usable chat model and fits
+# Pi 4 comfortably. It is enough for canned Q&A but is NOT recommended
+# for agent chat with tool calling (use Qwen2.5-1.5B-Instruct for that;
+# downloaded by scripts/download-reasoning-llm.sh).
 fetch_and_manifest \
     'https://huggingface.co/unsloth/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf' \
     'smollm2-360m-instruct-q4_k_m.gguf' 'SmolLM2 360M instruct model, Q4_K_M' 'llama-cpp' 'Apache-2.0'
