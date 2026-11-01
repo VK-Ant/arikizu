@@ -93,6 +93,10 @@ check_model() {
 check_model "yolov8n.onnx"                       10 "vision detect/segment"   "scripts/download-default-models.sh    OR    pip install ultralytics && python3 scripts/export_yolo_onnx.py"
 check_model "silero_vad.onnx"                     1 "audio voice detection"   "scripts/download-default-models.sh"
 check_model "smollm2-360m-instruct-q4_k_m.gguf" 200 "reasoning (local LLM)"   "scripts/download-default-models.sh"
+# Video studio models (optional, worker falls back gracefully)
+check_model "efficientdet_lite0.tflite"           4 "video object detector"   "scripts/download-video-models.sh"
+check_model "pose_landmarker_lite.task"           5 "video pose landmarks"    "scripts/download-video-models.sh"
+check_model "segformer_b0_ade20k_512_int8.onnx"   4 "video scene parsing"     "scripts/download-video-models.sh"
 
 printf '\n%sbuild artifact%s\n' "$BOLD" "$RESET"
 if [[ -x target/release/arikizu ]]; then

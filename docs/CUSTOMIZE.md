@@ -324,6 +324,36 @@ rebuilding.
 
 ---
 
+## 8. Customize the Video Studio
+
+The video worker is the most composable of the Arikizu workers because it
+plugs several things together. Four common customizations:
+
+**Add a new action to the recognizer.** Open
+`workers/video_worker/video_worker/actions.py`. Each action is a function
+`is_<name>(pose, ...) -> (confidence, evidence)`. Add yours, register it
+in `recognize()`'s `scores` dict and in `ACTIONS_KNOWN`, add a test in
+`workers/video_worker/tests/test_actions.py`. Hot-reload by restarting
+the worker.
+
+**Swap the VLM.** Qwen2.5-VL 3B is the default. For something smaller:
+MiniCPM-V 2.6, Moondream2, SmolVLM. Edit `models.py` REGISTRY to add the
+GGUF + mmproj URLs for the new model, then `ARIKIZU_VLM_MODEL=<key>` picks
+it. For a hosted VLM: set `ARIKIZU_VLM_ENDPOINT=http://your-server/v1/chat/completions`
+and the worker uses that instead of local inference.
+
+**Add a device profile.** `devices.py` has a `_FIT_TABLE` with one row per
+model per device class. If your target hardware is not covered, add a new
+entry to `_detect_device_class()` and add rows in each model's fit map.
+UI reads this on page load and uses it to pick the preset.
+
+**Use your own perception backend.** `MediaPipePerception` is one implementation.
+Any class that provides `process(rgb_image) -> FrameResult` works. Set
+`PERCEPTION_BACKEND=my_module:MyBackend` (as in the POC we based this on)
+and the worker uses yours.
+
+---
+
 ## Where things live
 
 ```

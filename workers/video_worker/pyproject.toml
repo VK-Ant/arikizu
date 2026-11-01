@@ -1,0 +1,33 @@
+[project]
+name = "video-worker"
+version = "0.0.1"
+description = "Arikizu video intelligence worker: multimodal action recognition, pose, scene parsing, VLM action search"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "arikizu-worker-sdk",
+    "numpy>=1.26.0",
+    "pillow>=10.0.0",
+    "opencv-python-headless>=4.10,<5.0",
+    "onnxruntime>=1.17.0",
+]
+
+# MediaPipe and llama-cpp-python are OPTIONAL. The worker starts without them
+# and reports the exact missing dep in video.backends. This matches audio
+# and reasoning worker patterns.
+#
+# To get the full stack:
+#   cd workers && uv add mediapipe>=0.10.14 --package video-worker
+#   cd workers && uv add llama-cpp-python>=0.3.0 --package video-worker
+
+[project.scripts]
+video-worker = "video_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+arikizu-worker-sdk = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["video_worker"]

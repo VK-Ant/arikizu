@@ -521,17 +521,17 @@ that is written.
 
 Not all devices are equal. Set expectations correctly.
 
-| Device               | Vision | Audio    | Reasoning   | Overall             |
-| -------------------- | ------ | -------- | ----------- | ------------------- |
-| Pi 4 (4 GB)          | 2-3 FPS CPU | VAD realtime, the ASR model 5x slow | LAN gateway only | Entry level; proves it all works |
-| Pi 5 (8 GB)          | 5-7 FPS CPU | VAD realtime, the ASR model 2x slow | Small LLM OK  | Comfortable for one line / room |
-| Jetson Orin Nano     | 25-40 FPS GPU | the ASR model near realtime | Local 3B LLM | Multi-camera lane / clinic |
-| Jetson AGX Orin      | 60+ FPS GPU | Instant | Local 7B LLM | Factory floor / vehicle |
-| Mac M-series         | 15-30 FPS CoreML | Instant | Local 7B LLM | Dev + demo + personal use |
-| Mac Intel            | 5-10 FPS CPU | Fine | LAN gateway | Dev + demo only |
-| Linux x86 + NVIDIA   | 50+ FPS GPU | Instant | Local 13B+ LLM | Workstation / small server |
-| Linux x86 no GPU     | 5-15 FPS CPU | Fine | LAN gateway | Dev + demo + light prod |
-| WSL on Windows       | 5-15 FPS CPU | Fine (needs ALSA passthrough) | LAN gateway | Dev only |
+| Device               | Vision | Audio    | Reasoning   | Video Studio | Overall             |
+| -------------------- | ------ | -------- | ----------- | ------------ | ------------------- |
+| Pi 4 (4 GB)          | 2-3 FPS CPU | VAD realtime, the ASR model 5x slow | LAN gateway only | 2-3 FPS, rule-based actions only (no VLM) | Entry level; proves it all works |
+| Pi 5 (8 GB)          | 5-7 FPS CPU | VAD realtime, the ASR model 2x slow | Small LLM OK  | 7-9 FPS, rule-based only | Comfortable for one line / room |
+| Jetson Orin Nano     | 25-40 FPS GPU | the ASR model near realtime | Local 3B LLM | 20-30 FPS live + Qwen VL at ~1.8s/prompt | Multi-camera lane / clinic |
+| Jetson AGX Orin      | 60+ FPS GPU | Instant | Local 7B LLM | 60+ FPS + Qwen VL at ~0.6s/prompt | Factory floor / vehicle |
+| Mac M-series         | 15-30 FPS CoreML | Instant | Local 7B LLM | 15-25 FPS + Qwen VL at ~0.9s | Dev + demo + personal use |
+| Mac Intel            | 5-10 FPS CPU | Fine | LAN gateway | 5-10 FPS, rule-based only | Dev + demo only |
+| Linux x86 + NVIDIA   | 50+ FPS GPU | Instant | Local 13B+ LLM | 30+ FPS + Qwen VL at ~0.4s | Workstation / small server |
+| Linux x86 no GPU     | 5-15 FPS CPU | Fine | LAN gateway | 10-15 FPS + Qwen VL at ~2.5s | Dev + demo + light prod |
+| WSL on Windows       | 5-15 FPS CPU | Fine (needs ALSA passthrough) | LAN gateway | 10-15 FPS + Qwen VL at ~3.5s | Dev only |
 
 The dashboard and API are identical on all of them. Picking a
 beefier device just gives you more throughput; the code never

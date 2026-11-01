@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Video Studio</title>
+  <style>
+    :root { --bg:#faf9f4; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e8e6df; --pass:#2d8a4e; --wait:#c89520; --fail:#b84040;
+            --mono: ui-monospace, Menlo, Consolas, monospace;
+            --sans: -apple-system, system-ui, Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#1a1a14; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a;
+              --card:#23231c; --border:#2f2f26; color-scheme: dark; }
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+    .app-header{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--card);display:flex;gap:12px;align-items:center}
+    .app-header a.home{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+    .app-header a.home:hover strong{color:var(--accent)}
+    .app-header img{width:32px;height:32px;object-fit:contain}
+    .app-header strong{font-size:16px;letter-spacing:-0.01em}
+    .app-header .sep{color:var(--muted);margin:0 2px}
+    .app-header .page{font-size:15px;color:var(--muted)}
+    main{padding:20px 24px;max-width:1200px;margin:0 auto}
+
+    /* Device banner */
+    .device-banner{padding:12px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);
+                   margin-bottom:16px;font-family:var(--mono);font-size:13px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+    .device-banner .pill{padding:2px 8px;border-radius:12px;font-size:11px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+    .device-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;vertical-align:middle}
+
+    /* Tabs */
+    .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .tabs button{background:transparent;border:none;color:var(--muted);padding:10px 16px;cursor:pointer;font:inherit;
+                 border-bottom:2px solid transparent;position:relative;top:1px}
+    .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+    .panel{display:none}
+    .panel[aria-selected="true"]{display:block}
+
+    /* Controls */
+    .ctl{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+    input, select, textarea, button{font:inherit;border-radius:4px}
+    input[type="text"], input[type="file"], textarea{background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:6px 10px}
+    textarea{min-width:300px;min-height:60px;font-family:var(--mono);font-size:13px}
+    button{background:var(--accent);color:#fff;border:none;padding:8px 16px;cursor:pointer}
+    button.sec{background:var(--card);color:var(--fg);border:1px solid var(--border)}
+
+    /* Stage */
+    .stage{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+    .stage-grid{display:grid;grid-template-columns:minmax(0, 1fr) 320px;gap:16px}
+    @media (max-width: 900px){.stage-grid{grid-template-columns:1fr}}
+    .vwrap{position:relative;background:#000;border-radius:6px;overflow:hidden}
+    .vwrap video, .vwrap canvas{display:block;width:100%;height:auto;max-height:70vh}
+    .overlay{position:absolute;top:0;left:0;pointer-events:none;width:100%;height:100%}
+    .overlay.click{pointer-events:auto;cursor:crosshair}
+
+    /* Toolbar */
+    .toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+    .toolbar label{display:inline-flex;gap:6px;align-items:center;padding:4px 10px;border:1px solid var(--border);border-radius:14px;font-size:12px;font-family:var(--mono);color:var(--muted);cursor:pointer;background:var(--bg)}
+    .toolbar label.on{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);border-color:var(--accent)}
+    .toolbar input[type="checkbox"]{margin:0}
+
+    /* HUD panel */
+    .hud{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px}
+    .hud h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+    .hud .big{font-size:18px;font-weight:600;margin-bottom:12px}
+    .hud .row{display:flex;justify-content:space-between;padding:4px 0;font-family:var(--mono);font-size:12px}
+    .hud .row span:first-child{color:var(--muted)}
+    .hud .pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11px;font-family:var(--mono);background:color-mix(in srgb,var(--pass) 20%,transparent);color:var(--pass)}
+
+    /* Timeline */
+    .timeline{margin-top:16px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px}
+    .timeline h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+    .timeline .track{position:relative;height:24px;background:var(--card);border-radius:4px;border:1px solid var(--border)}
+    .timeline .evt{position:absolute;top:2px;bottom:2px;background:color-mix(in srgb,var(--accent) 50%,transparent);border-radius:2px;cursor:pointer}
+    .timeline .evt:hover{background:var(--accent)}
+    .timeline .tick{position:absolute;top:-16px;font-size:10px;color:var(--muted);font-family:var(--mono);transform:translateX(-50%)}
+
+    /* History */
+    .history-row{padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--card);cursor:pointer}
+    .history-row:hover{border-color:var(--accent)}
+    .history-row .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}
+
+    .status-tag{display:inline-block;font-weight:600;padding:1px 6px;border-radius:3px;font-size:11px;font-family:var(--mono)}
+    .status-tag.ready{background:color-mix(in srgb,var(--pass) 20%,transparent);color:var(--pass)}
+    .status-tag.missing{background:color-mix(in srgb,var(--fail) 20%,transparent);color:var(--fail)}
+    .status-tag.optional{background:color-mix(in srgb,var(--wait) 20%,transparent);color:var(--wait)}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
+    <span class="sep">/</span>
+    <span class="page">Video Studio</span>
+  </header>
+
+  <main>
+    <div class="device-banner" id="device-banner">
+      <span><span class="dot" id="d-dot"></span><span id="d-name">detecting device...</span></span>
+      <span class="pill" id="d-preset">preset: ...</span>
+      <span id="d-models" style="color:var(--muted)"></span>
+      <span style="margin-left:auto" id="d-vlm"></span>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button id="t-video" role="tab" aria-selected="true" data-panel="p-video">Video file</button>
+      <button id="t-webcam" role="tab" aria-selected="false" data-panel="p-webcam">Webcam</button>
+      <button id="t-history" role="tab" aria-selected="false" data-panel="p-history">History</button>
+    </div>
+
+    <!-- ========== VIDEO FILE PANEL ========== -->
+    <section id="p-video" class="panel" aria-selected="true">
+      <div class="ctl">
+        <strong>Load clip:</strong>
+        <input id="file" type="file" accept="video/*,.mp4,.mov,.mkv,.webm">
+        <strong style="margin-left:16px">Prompt:</strong>
+        <input id="prompt-text" type="text" placeholder='e.g. "a person waving"' style="min-width:260px">
+        <strong style="margin-left:16px">Reference image:</strong>
+        <input id="prompt-image" type="file" accept="image/*">
+        <button id="run-video">Run analysis</button>
+      </div>
+      <div class="ctl" style="font-size:12px;color:var(--muted)">
+        <span>Sample every</span>
+        <select id="sample-interval"><option value="0.5">0.5 s</option><option value="1" selected>1 s</option><option value="2">2 s</option><option value="3">3 s</option></select>
+        <span style="margin-left:16px">Max frames</span>
+        <select id="max-frames"><option>8</option><option>16</option><option selected>24</option><option>48</option></select>
+        <span style="margin-left:16px">VLM pass</span>
+        <select id="vlm-mode">
+          <option value="off">off (rule-based only)</option>
+          <option value="every" selected>every N frames</option>
+        </select>
+      </div>
+
+      <div class="stage">
+        <div class="stage-grid">
+          <div>
+            <div class="vwrap">
+              <video id="vid" controls playsinline preload="metadata" muted></video>
+              <canvas id="overlay" class="overlay"></canvas>
+            </div>
+            <div class="toolbar" id="toolbar">
+              <label><input type="checkbox" id="t-boxes" checked> boxes</label>
+              <label><input type="checkbox" id="t-pose" checked> pose</label>
+              <label><input type="checkbox" id="t-mask"> mask</label>
+              <label><input type="checkbox" id="t-blur"> privacy blur</label>
+              <label><input type="checkbox" id="t-labels" checked> labels</label>
+            </div>
+          </div>
+          <aside class="hud" id="hud">
+            <h4>At current time</h4>
+            <div class="big" id="hud-action">—</div>
+            <div class="row"><span>confidence</span><span id="hud-conf">—</span></div>
+            <div class="row"><span>scene</span><span id="hud-scene">—</span></div>
+            <div class="row"><span>people</span><span id="hud-people">0</span></div>
+            <div class="row"><span>objects</span><span id="hud-objects">0</span></div>
+            <div class="row"><span>time</span><span id="hud-time">0.00s</span></div>
+            <h4 style="margin-top:14px">Latency (ms, last frame)</h4>
+            <div class="row"><span>detect</span><span id="ms-detect">—</span></div>
+            <div class="row"><span>pose</span><span id="ms-pose">—</span></div>
+            <div class="row"><span>face</span><span id="ms-face">—</span></div>
+            <div class="row"><span>vlm</span><span id="ms-vlm">—</span></div>
+          </aside>
+        </div>
+        <div class="timeline" id="timeline" hidden>
+          <h4>Action timeline</h4>
+          <div class="track" id="tl-track"></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px" id="tl-summary"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== WEBCAM PANEL ========== -->
+    <section id="p-webcam" class="panel" aria-selected="false">
+      <div class="ctl">
+        <button id="cam-start">Start webcam</button>
+        <button id="cam-stop" class="sec" disabled>Stop</button>
+        <strong style="margin-left:16px">Prompt:</strong>
+        <input id="cam-prompt" type="text" placeholder='e.g. "a person waving"' style="min-width:260px">
+        <span id="cam-status" style="color:var(--muted);margin-left:12px;font-family:var(--mono);font-size:12px">idle</span>
+      </div>
+      <div class="ctl" style="font-size:12px;color:var(--muted)">
+        <span>FPS target</span>
+        <select id="cam-fps"><option>2</option><option selected>5</option><option>10</option></select>
+        <span style="margin-left:16px">VLM cadence</span>
+        <select id="cam-vlm-cadence"><option value="0">off</option><option value="3">every 3 s</option><option value="5" selected>every 5 s</option></select>
+        <label style="margin-left:16px"><input type="checkbox" id="cam-blur" checked> privacy blur</label>
+      </div>
+      <div class="stage">
+        <div class="stage-grid">
+          <div>
+            <div class="vwrap">
+              <video id="cam-vid" autoplay playsinline muted></video>
+              <canvas id="cam-overlay" class="overlay"></canvas>
+            </div>
+          </div>
+          <aside class="hud">
+            <h4>Live</h4>
+            <div class="big" id="cam-action">—</div>
+            <div class="row"><span>confidence</span><span id="cam-conf">—</span></div>
+            <div class="row"><span>FPS actual</span><span id="cam-fps-actual">0</span></div>
+            <div class="row"><span>VLM match</span><span id="cam-vlm">—</span></div>
+            <h4 style="margin-top:14px">Pipeline</h4>
+            <div class="row"><span>detect</span><span id="cam-ms-detect">—</span></div>
+            <div class="row"><span>pose</span><span id="cam-ms-pose">—</span></div>
+            <div class="row"><span>face</span><span id="cam-ms-face">—</span></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== HISTORY PANEL ========== -->
+    <section id="p-history" class="panel" aria-selected="false">
+      <div class="ctl">
+        <button id="refresh-history" class="sec">Refresh</button>
+        <span style="color:var(--muted);font-size:12px;margin-left:12px">Last 20 analyses</span>
+      </div>
+      <div id="history-list"></div>
+    </section>
+  </main>
+
+<script>
+"use strict";
+
+const API = "/api/v1";
+
+// ---------- Device + backends ----------
+let DEVICE = {device_class: "unknown"};
+let PRESET = {};
+
+async function callCap(cap, payload = {}) {
+  const r = await fetch(`${API}/call/${cap.replace(".", "/")}`, {
+    method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({payload}),
+  });
+  if (!r.ok) throw new Error(`${cap}: ${r.status}`);
+  return r.json();
+}
+
+async function loadDevice() {
+  try {
+    const r = await callCap("video.device_report");
+    DEVICE = r.device || {};
+    PRESET = r.preset || {};
+    const dot = document.getElementById("d-dot");
+    document.getElementById("d-name").textContent =
+      `${DEVICE.device_class || "unknown"} - ${DEVICE.cpu_count || "?"} CPUs, ${DEVICE.ram_gb || "?"} GB RAM` +
+      (DEVICE.gpu_name ? ", " + DEVICE.gpu_name : "");
+    document.getElementById("d-preset").textContent =
+      `preset: ${PRESET.detector || "?"} + ${PRESET.pose || "?"} + ${PRESET.vlm || "none"}`;
+    document.getElementById("d-models").textContent = PRESET.note || "";
+    dot.style.background = "var(--pass)";
+  } catch (e) {
+    document.getElementById("d-name").textContent = "runtime unreachable";
+    document.getElementById("d-dot").style.background = "var(--fail)";
+  }
+  try {
+    const b = await callCap("video.backends");
+    const vlm = b.vlm || {};
+    const vlmEl = document.getElementById("d-vlm");
+    if (vlm.mode === "none") {
+      vlmEl.innerHTML = '<span class="status-tag optional">VLM optional</span>';
+    } else {
+      vlmEl.innerHTML = `<span class="status-tag ready">VLM ${vlm.mode}</span>`;
+    }
+  } catch (e) {}
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", "false"));
+    document.querySelectorAll(".panel").forEach(p => p.setAttribute("aria-selected", "false"));
+    btn.setAttribute("aria-selected", "true");
+    document.getElementById(btn.dataset.panel).setAttribute("aria-selected", "true");
+    if (btn.id === "t-history") loadHistory();
+  };
+});
+
+// ---------- Overlay drawing ----------
+function drawFrame(canvas, result, opts) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const W = canvas.width, H = canvas.height;
+  const f = result.frame || {};
+  const dets = f.detections || [];
+  const landmarks = f.pose_landmarks || [];
+  const faces = f.faces || [];
+
+  // Privacy blur
+  if (opts.blur && faces.length) {
+    // Simple approach: draw a solid rect; real blur would need a shader
+    for (const face of faces) {
+      const [x, y, w, h] = face;
+      ctx.fillStyle = "rgba(20,20,20,0.9)";
+      ctx.fillRect(x * W, y * H, w * W, h * H);
+    }
+  }
+
+  // Boxes
+  if (opts.boxes) {
+    for (const d of dets) {
+      const [x1, y1, x2, y2] = d.bbox;
+      ctx.strokeStyle = d.label === "person" ? "#e07a4a" : "#3498db";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1 * W, y1 * H, (x2 - x1) * W, (y2 - y1) * H);
+      if (opts.labels) {
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = ctx.strokeStyle;
+        const txt = `${d.label} ${(d.score * 100 | 0)}%`;
+        const tw = ctx.measureText(txt).width;
+        ctx.fillRect(x1 * W, y1 * H - 16, tw + 10, 16);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(txt, x1 * W + 5, y1 * H - 4);
+      }
+    }
+  }
+
+  // Pose skeleton
+  if (opts.pose && landmarks.length) {
+    const edges = [
+      [11,12],[11,13],[13,15],[12,14],[14,16],         // arms + shoulders
+      [11,23],[12,24],[23,24],                           // torso
+      [23,25],[25,27],[24,26],[26,28],                   // legs
+    ];
+    ctx.strokeStyle = "#2d8a4e";
+    ctx.lineWidth = 2.5;
+    for (const [a, b] of edges) {
+      if (!landmarks[a] || !landmarks[b]) continue;
+      ctx.beginPath();
+      ctx.moveTo(landmarks[a][0] * W, landmarks[a][1] * H);
+      ctx.lineTo(landmarks[b][0] * W, landmarks[b][1] * H);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#2d8a4e";
+    for (const p of landmarks) {
+      ctx.beginPath();
+      ctx.arc(p[0] * W, p[1] * H, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function getOpts() {
+  return {
+    boxes: document.getElementById("t-boxes").checked,
+    pose: document.getElementById("t-pose").checked,
+    blur: document.getElementById("t-blur").checked,
+    labels: document.getElementById("t-labels").checked,
+  };
+}
+
+// ---------- Video file analysis ----------
+const vid = document.getElementById("vid");
+const overlay = document.getElementById("overlay");
+
+document.getElementById("file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  vid.src = URL.createObjectURL(f);
+  vid.load();
+});
+
+async function captureFrame(videoEl, timeS) {
+  return new Promise((resolve) => {
+    const onSeeked = () => {
+      videoEl.removeEventListener("seeked", onSeeked);
+      const c = document.createElement("canvas");
+      c.width = videoEl.videoWidth;
+      c.height = videoEl.videoHeight;
+      c.getContext("2d").drawImage(videoEl, 0, 0);
+      resolve(c.toDataURL("image/jpeg", 0.7).split(",")[1]);
+    };
+    videoEl.addEventListener("seeked", onSeeked);
+    videoEl.currentTime = timeS;
+  });
+}
+
+async function captureImageFileBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+document.getElementById("run-video").onclick = async () => {
+  if (!vid.src) { alert("pick a video first"); return; }
+  if (vid.readyState < 1) await new Promise(r => vid.addEventListener("loadedmetadata", r, {once:true}));
+  const duration = vid.duration;
+  if (!isFinite(duration)) { alert("could not read video duration"); return; }
+
+  let prompt = document.getElementById("prompt-text").value.trim();
+
+  // If user uploaded a reference image, turn it into a prompt first.
+  const imgFile = document.getElementById("prompt-image").files[0];
+  if (imgFile && !prompt) {
+    const btn = document.getElementById("run-video");
+    btn.disabled = true; btn.textContent = "Reading reference image...";
+    try {
+      const b64 = await captureImageFileBase64(imgFile);
+      const r = await callCap("video.search_image", {image_base64: b64});
+      prompt = r.action_phrase || "";
+      document.getElementById("prompt-text").value = prompt;
+    } catch (e) {
+      alert("could not parse reference image: " + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Run analysis";
+    }
+  }
+
+  const interval = parseFloat(document.getElementById("sample-interval").value);
+  const maxFrames = parseInt(document.getElementById("max-frames").value);
+  const vlmMode = document.getElementById("vlm-mode").value;
+
+  // Sampled times
+  const times = [];
+  for (let t = 0; t <= duration && times.length < maxFrames; t += interval) times.push(t);
+
+  // Set overlay size
+  overlay.width = vid.videoWidth;
+  overlay.height = vid.videoHeight;
+
+  const btn = document.getElementById("run-video");
+  btn.disabled = true;
+  const frames = [];
+  for (let i = 0; i < times.length; i++) {
+    const t = times[i];
+    btn.textContent = `frame ${i+1}/${times.length} at ${t.toFixed(1)}s`;
+    const b64 = await captureFrame(vid, t);
+    const effectivePrompt = (vlmMode === "every" && i % 2 === 0) ? prompt : "";
+    const r = await callCap("video.analyze_frame", {
+      image_base64: b64, prompt: effectivePrompt, time_s: t, motion_px_per_s: 0,
+    });
+    frames.push({t, result: r});
+    drawFrame(overlay, r, getOpts());
+    const act = r.action_rule || {};
+    document.getElementById("hud-action").textContent = act.action || "unknown";
+    document.getElementById("hud-conf").textContent = (act.confidence || 0).toFixed(2);
+    document.getElementById("hud-time").textContent = t.toFixed(2) + "s";
+    document.getElementById("hud-people").textContent = (r.frame?.detections || []).filter(d => d.label === "person").length;
+    document.getElementById("hud-objects").textContent = (r.frame?.detections || []).length;
+    const ms = r.frame?.ms || {};
+    document.getElementById("ms-detect").textContent = ms.detect || "—";
+    document.getElementById("ms-pose").textContent = ms.pose || "—";
+    document.getElementById("ms-face").textContent = ms.face || "—";
+    if (r.action_vlm) {
+      document.getElementById("ms-vlm").textContent = r.action_vlm.ms || "—";
+      if (r.action_vlm.matches) {
+        document.getElementById("hud-scene").textContent = `VLM: ${r.action_vlm.evidence}`;
+      }
+    }
+  }
+
+  // Build timeline
+  const tl = document.getElementById("timeline");
+  tl.hidden = false;
+  const track = document.getElementById("tl-track");
+  track.innerHTML = "";
+  const events = {};  // action -> [start, end]
+  let current = null;
+  for (const f of frames) {
+    const name = (f.result.action_rule?.action) || "unknown";
+    if (name === "unknown") { current = null; continue; }
+    if (current && current.name === name) {
+      current.end = f.t;
+    } else {
+      current = {name, start: f.t, end: f.t};
+      events[name] = events[name] || [];
+      events[name].push(current);
+    }
+  }
+  const flat = Object.values(events).flat();
+  for (const e of flat) {
+    const el = document.createElement("div");
+    el.className = "evt";
+    el.style.left = (e.start / duration * 100) + "%";
+    el.style.width = Math.max(2, (e.end - e.start) / duration * 100) + "%";
+    el.title = `${e.name} ${e.start.toFixed(1)}-${e.end.toFixed(1)}s`;
+    track.appendChild(el);
+  }
+  document.getElementById("tl-summary").textContent =
+    `${flat.length} action segments across ${times.length} sampled frames (${duration.toFixed(1)}s clip)`;
+
+  // Record to history
+  const subjects = [];  // aggregator can be added later
+  await callCap("video.record_analysis", {
+    video_name: document.getElementById("file").files[0]?.name || "clip",
+    prompt, backend: "mediapipe",
+    total_frames: Math.round(duration * 30),
+    analyzed_frames: times.length,
+    duration_s: duration,
+    events: flat.map(e => ({action: e.name, start_s: e.start, end_s: e.end})),
+    subjects,
+  });
+
+  btn.disabled = false;
+  btn.textContent = "Run analysis";
+};
+
+// ---------- Webcam ----------
+let camStream = null, camTimer = null, camFrameCount = 0, camLastT = 0, camLastVLM = 0;
+
+async function startCam() {
+  const camVid = document.getElementById("cam-vid");
+  const camOverlay = document.getElementById("cam-overlay");
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video: {width: 640, height: 480}});
+    camVid.srcObject = camStream;
+    await camVid.play();
+    camOverlay.width = camVid.videoWidth;
+    camOverlay.height = camVid.videoHeight;
+    document.getElementById("cam-stop").disabled = false;
+    document.getElementById("cam-start").disabled = true;
+    document.getElementById("cam-status").textContent = "running";
+    camFrameCount = 0; camLastT = performance.now();
+
+    const fpsTarget = parseInt(document.getElementById("cam-fps").value);
+    const vlmCadence = parseFloat(document.getElementById("cam-vlm-cadence").value);
+
+    camTimer = setInterval(async () => {
+      if (!camStream) return;
+      const c = document.createElement("canvas");
+      c.width = camVid.videoWidth; c.height = camVid.videoHeight;
+      c.getContext("2d").drawImage(camVid, 0, 0);
+      const b64 = c.toDataURL("image/jpeg", 0.6).split(",")[1];
+      try {
+        const r = await callCap("video.live_detect", {image_base64: b64});
+        drawFrame(camOverlay, r, {
+          boxes: true, pose: true,
+          blur: document.getElementById("cam-blur").checked,
+          labels: true,
+        });
+        const act = r.action || {};
+        document.getElementById("cam-action").textContent = act.action || "—";
+        document.getElementById("cam-conf").textContent = (act.confidence || 0).toFixed(2);
+        const ms = r.frame?.ms || {};
+        document.getElementById("cam-ms-detect").textContent = ms.detect || "—";
+        document.getElementById("cam-ms-pose").textContent = ms.pose || "—";
+        document.getElementById("cam-ms-face").textContent = ms.face || "—";
+      } catch (e) {
+        document.getElementById("cam-status").textContent = "error: " + e.message;
+      }
+      camFrameCount++;
+      const now = performance.now();
+      if (now - camLastT > 1000) {
+        document.getElementById("cam-fps-actual").textContent = camFrameCount.toFixed(1);
+        camFrameCount = 0; camLastT = now;
+      }
+      // VLM pass
+      const prompt = document.getElementById("cam-prompt").value.trim();
+      if (prompt && vlmCadence > 0 && (now - camLastVLM) / 1000 >= vlmCadence) {
+        camLastVLM = now;
+        try {
+          const r = await callCap("video.live_describe", {image_base64: b64, prompt});
+          document.getElementById("cam-vlm").textContent =
+            r.matches ? `YES ${(r.confidence * 100 | 0)}%` : "no";
+        } catch (e) {
+          document.getElementById("cam-vlm").textContent = "err";
+        }
+      }
+    }, Math.max(100, Math.floor(1000 / fpsTarget)));
+  } catch (e) {
+    document.getElementById("cam-status").textContent = "denied: " + e.message;
+  }
+}
+
+function stopCam() {
+  if (camTimer) { clearInterval(camTimer); camTimer = null; }
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById("cam-stop").disabled = true;
+  document.getElementById("cam-start").disabled = false;
+  document.getElementById("cam-status").textContent = "idle";
+}
+
+document.getElementById("cam-start").onclick = startCam;
+document.getElementById("cam-stop").onclick = stopCam;
+
+// ---------- History ----------
+async function loadHistory() {
+  const el = document.getElementById("history-list");
+  el.innerHTML = "<p style='color:var(--muted)'>loading...</p>";
+  try {
+    const r = await callCap("video.history", {limit: 20});
+    const rows = r.rows || [];
+    if (!rows.length) { el.innerHTML = "<p style='color:var(--muted)'>no analyses yet</p>"; return; }
+    el.innerHTML = "";
+    for (const row of rows) {
+      const div = document.createElement("div");
+      div.className = "history-row";
+      const d = new Date(row.created_at * 1000);
+      div.innerHTML = `
+        <strong>${row.video_name || "clip"}</strong>
+        ${row.prompt ? `<em style="color:var(--muted)">— ${row.prompt}</em>` : ""}
+        <div class="meta">${d.toLocaleString()} · ${row.duration_s?.toFixed?.(1) || "?"}s · ${row.event_count} events · ${row.backend}</div>
+      `;
+      el.appendChild(div);
+    }
+  } catch (e) {
+    el.innerHTML = `<p style='color:var(--fail)'>failed to load: ${e.message}</p>`;
+  }
+}
+document.getElementById("refresh-history").onclick = loadHistory;
+
+// ---------- Boot ----------
+loadDevice();
+</script>
+</body>
+</html>

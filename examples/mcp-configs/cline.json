@@ -1,0 +1,20 @@
+{
+  "_comment": "For Cline: open its settings, find the MCP servers section, paste this block. Replace /ABSOLUTE/PATH with your Arikizu checkout.",
+  "mcpServers": {
+    "arikizu": {
+      "command": "python3",
+      "args": ["/ABSOLUTE/PATH/TO/arikizu/mcp/arikizu_mcp_server.py"],
+      "env": {
+        "ARIKIZU_HTTP": "http://127.0.0.1:7000"
+      },
+      "autoApprove": [
+        "video_live_detect",
+        "video_recognize_pose",
+        "video_actions_known",
+        "video_device_report",
+        "reasoning_answer",
+        "guard_scan"
+      ]
+    }
+  }
+}

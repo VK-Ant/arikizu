@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="/demo/favicon.png">
+  <title>Arikizu Agent Studio</title>
+  <style>
+    :root { --bg:#faf9f4; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
+            --border:#e8e6df; --pass:#2d8a4e; --wait:#c89520; --fail:#b84040;
+            --mono: ui-monospace, Menlo, Consolas, monospace;
+            --sans: -apple-system, system-ui, Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#1a1a14; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a;
+              --card:#23231c; --border:#2f2f26; color-scheme: dark; }
+    }
+    *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5;height:100%}
+    .app-header{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--card);display:flex;gap:12px;align-items:center}
+    .app-header a.home{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+    .app-header a.home:hover strong{color:var(--accent)}
+    .app-header img{width:32px;height:32px;object-fit:contain}
+    .app-header strong{font-size:16px;letter-spacing:-0.01em}
+    .app-header .sep{color:var(--muted);margin:0 2px}
+    .app-header .page{font-size:15px;color:var(--muted)}
+
+    main{display:grid;grid-template-columns:280px 1fr 320px;height:calc(100vh - 60px)}
+    @media (max-width:1100px){main{grid-template-columns:220px 1fr}}
+    @media (max-width:800px){main{grid-template-columns:1fr}}
+
+    .side{border-right:1px solid var(--border);padding:12px;overflow-y:auto;background:var(--card)}
+    .side h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+    .agent-row{padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg);cursor:pointer;transition:border-color .15s}
+    .agent-row:hover{border-color:var(--accent)}
+    .agent-row.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+    .agent-row .name{font-weight:600;font-size:13px}
+    .agent-row .desc{font-size:11px;color:var(--muted);margin-top:2px}
+    .btn{font:inherit;background:var(--accent);color:#fff;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-size:13px}
+    .btn.sec{background:var(--card);color:var(--fg);border:1px solid var(--border)}
+    .btn.sm{padding:4px 8px;font-size:12px}
+
+    .chat{display:flex;flex-direction:column;height:100%;background:var(--bg)}
+    .chat-header{padding:12px 20px;border-bottom:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .chat-header .name{font-weight:600}
+    .chat-messages{flex:1;overflow-y:auto;padding:16px 20px}
+    .msg{margin-bottom:14px;max-width:85%}
+    .msg.user{margin-left:auto;text-align:right}
+    .msg .bubble{display:inline-block;padding:10px 14px;border-radius:12px;text-align:left;line-height:1.5;white-space:pre-wrap}
+    .msg.user .bubble{background:var(--accent);color:#fff;border-top-right-radius:3px}
+    .msg.assistant .bubble{background:var(--card);border:1px solid var(--border);border-top-left-radius:3px}
+    .tool-record{margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-family:var(--mono);font-size:11px}
+    .tool-record .cap{font-weight:600;color:var(--accent)}
+    .tool-record .policy{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:6px}
+    .tool-record .policy.auto{background:color-mix(in srgb,var(--pass) 20%,transparent);color:var(--pass)}
+    .tool-record .policy.ask{background:color-mix(in srgb,var(--wait) 20%,transparent);color:var(--wait)}
+    .tool-record .policy.deny{background:color-mix(in srgb,var(--fail) 20%,transparent);color:var(--fail)}
+    .tool-record pre{margin:4px 0 0;background:var(--bg);padding:6px;border-radius:3px;overflow-x:auto;font-size:10px;max-height:200px}
+    .chat-input{display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--card)}
+    .chat-input textarea{flex:1;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:10px;resize:vertical;min-height:50px;font-family:var(--mono);font-size:13px}
+
+    .policy{padding:12px;overflow-y:auto;background:var(--card);border-left:1px solid var(--border)}
+    .policy h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+    .policy-group{margin-bottom:14px}
+    .cap-row{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:3px;font-family:var(--mono);font-size:11px}
+    .cap-row:hover{background:var(--bg)}
+    .cap-row select{font:inherit;font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:3px;padding:1px 4px}
+    .cap-row .cap-name{flex:1}
+
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100}
+    .modal-bg.on{display:flex}
+    .modal{background:var(--card);padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:85vh;overflow-y:auto}
+    .modal h3{margin:0 0 12px}
+    .modal label{display:block;margin-top:10px;font-size:12px;color:var(--muted)}
+    .modal input, .modal textarea{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:8px;font:inherit;margin-top:4px}
+    .modal textarea{min-height:120px;font-family:var(--mono);font-size:12px}
+
+    .empty{padding:40px;text-align:center;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
+    <span class="sep">/</span>
+    <span class="page">Agent Studio</span>
+  </header>
+
+  <main>
+    <!-- LEFT: Agent list -->
+    <div class="side">
+      <h3>Agents</h3>
+      <button class="btn" id="new-agent" style="width:100%;margin-bottom:6px">New agent</button>
+      <button class="btn sec sm" id="import-examples" style="width:100%;margin-bottom:10px">Import examples</button>
+      <div id="agent-list"></div>
+    </div>
+
+    <!-- CENTER: Chat -->
+    <div class="chat">
+      <div class="chat-header" id="chat-header">
+        <div>
+          <div class="name" id="chat-agent-name">Pick or create an agent</div>
+          <div style="font-size:11px;color:var(--muted)" id="chat-agent-desc"></div>
+        </div>
+        <div>
+          <button class="btn sec sm" id="new-conv" hidden>New conversation</button>
+          <button class="btn sec sm" id="edit-agent" hidden>Edit</button>
+        </div>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="empty">
+          Agents chat with you AND call Arikizu capabilities when they need to.<br><br>
+          Every call is logged and governed by the agent's policy:<br>
+          <strong style="color:var(--pass)">auto</strong> runs immediately,
+          <strong style="color:var(--wait)">ask</strong> waits for human approval,
+          <strong style="color:var(--fail)">deny</strong> never runs.
+        </div>
+      </div>
+      <div class="chat-input" id="chat-input" hidden>
+        <textarea id="msg" placeholder="Message the agent..."></textarea>
+        <button class="btn" id="send">Send</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Policy -->
+    <div class="policy" id="policy-panel"></div>
+  </main>
+
+  <!-- New / edit agent modal -->
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal">
+      <h3 id="modal-title">New agent</h3>
+      <label>Name</label>
+      <input id="m-name" placeholder="e.g. Safety Inspector">
+      <label>Description (one line, optional)</label>
+      <input id="m-desc" placeholder="What this agent does">
+      <label>System prompt</label>
+      <textarea id="m-prompt" placeholder="You are a factory floor safety inspector. When the user asks about an area, call video.analyze_frame on the latest frame and report any people without hard hats."></textarea>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sec" id="m-cancel">Cancel</button>
+        <button class="btn" id="m-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const API = "/api/v1";
+
+async function callCap(cap, payload = {}) {
+  const r = await fetch(`${API}/call/${cap.replace(".", "/")}`, {
+    method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({payload}),
+  });
+  if (!r.ok) throw new Error(`${cap}: ${r.status}`);
+  return r.json();
+}
+
+let currentAgent = null;
+let currentConversation = null;
+
+async function loadAgents() {
+  try {
+    const r = await callCap("agent.list");
+    const list = document.getElementById("agent-list");
+    list.innerHTML = "";
+    for (const a of r.agents || []) {
+      const el = document.createElement("div");
+      el.className = "agent-row";
+      el.innerHTML = `<div class="name">${a.name}</div>
+                      <div class="desc">${a.description || "(no description)"}</div>`;
+      el.onclick = () => selectAgent(a.id);
+      if (currentAgent?.id === a.id) el.classList.add("active");
+      list.appendChild(el);
+    }
+    if ((r.agents || []).length === 0) {
+      list.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:8px">
+                       No agents yet. Click "New agent" to create one.
+                       </div>`;
+    }
+  } catch (e) {
+    document.getElementById("agent-list").innerHTML =
+      `<div style="color:var(--fail);font-size:12px">load failed: ${e.message}</div>`;
+  }
+}
+
+async function selectAgent(agent_id) {
+  try {
+    const a = await callCap("agent.get", {agent_id});
+    if (a.error) { alert(a.error); return; }
+    currentAgent = a;
+    currentConversation = null;
+    document.getElementById("chat-agent-name").textContent = a.name;
+    document.getElementById("chat-agent-desc").textContent = a.description || "";
+    document.getElementById("new-conv").hidden = false;
+    document.getElementById("edit-agent").hidden = false;
+    document.getElementById("chat-messages").innerHTML = `
+      <div class="empty">
+        Start a conversation. The agent sees its policy, which capabilities it may call,
+        and your messages.
+      </div>`;
+    document.getElementById("chat-input").hidden = false;
+    renderPolicy(a.allowed_capabilities);
+    await loadAgents();   // highlight active
+  } catch (e) {
+    alert("select failed: " + e.message);
+  }
+}
+
+function renderPolicy(allowed) {
+  const el = document.getElementById("policy-panel");
+  el.innerHTML = "<h3>Policy for this agent</h3>";
+  for (const [action, caps] of Object.entries(allowed || {})) {
+    if (!caps.length) continue;
+    const g = document.createElement("div");
+    g.className = "policy-group";
+    g.innerHTML = `<h3 style="color:var(--${action === 'auto' ? 'pass' : action === 'ask' ? 'wait' : 'fail'});margin-top:12px">
+                   ${action.toUpperCase()} <span style="color:var(--muted)">(${caps.length})</span></h3>`;
+    for (const c of caps) {
+      g.innerHTML += `<div class="cap-row"><span class="cap-name">${c}</span></div>`;
+    }
+    el.appendChild(g);
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById("msg");
+  const text = input.value.trim();
+  if (!text || !currentAgent) return;
+  input.value = "";
+
+  const messages = document.getElementById("chat-messages");
+  if (messages.querySelector(".empty")) messages.innerHTML = "";
+  const userDiv = document.createElement("div");
+  userDiv.className = "msg user";
+  userDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  messages.appendChild(userDiv);
+
+  const thinking = document.createElement("div");
+  thinking.className = "msg assistant";
+  thinking.innerHTML = `<div class="bubble" style="color:var(--muted)"><em>thinking...</em></div>`;
+  messages.appendChild(thinking);
+  messages.scrollTop = messages.scrollHeight;
+
+  try {
+    const r = await callCap("agent.chat", {
+      agent_id: currentAgent.id,
+      conversation_id: currentConversation || "",
+      message: text,
+    });
+    if (!currentConversation) currentConversation = r.conversation_id;
+    thinking.innerHTML = `<div class="bubble">${escapeHtml(r.assistant_message || "(no response)")}</div>`;
+    for (const tc of (r.tool_calls || [])) {
+      const tr = document.createElement("div");
+      tr.className = "tool-record";
+      const resultStr = tc.result ? JSON.stringify(tc.result, null, 2) :
+                        tc.error ? "error: " + tc.error :
+                        tc.decision === "ask" ? "waiting for human approval" :
+                        tc.decision === "deny" ? "denied" : "";
+      tr.innerHTML = `
+        <span class="cap">${tc.capability}</span>
+        <span class="policy ${tc.decision}">${tc.decision.toUpperCase()}</span>
+        <div style="color:var(--muted);margin-top:4px">${escapeHtml(tc.decision_reason || "")}</div>
+        ${resultStr ? `<pre>${escapeHtml(resultStr.slice(0, 400))}</pre>` : ""}
+      `;
+      thinking.appendChild(tr);
+    }
+  } catch (e) {
+    thinking.innerHTML = `<div class="bubble" style="color:var(--fail)">error: ${escapeHtml(e.message)}</div>`;
+  }
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+}
+
+// Modal
+let modalMode = "new";  // or "edit"
+function openModal(mode) {
+  modalMode = mode;
+  document.getElementById("modal-title").textContent = mode === "new" ? "New agent" : "Edit agent";
+  if (mode === "edit" && currentAgent) {
+    document.getElementById("m-name").value = currentAgent.name;
+    document.getElementById("m-desc").value = currentAgent.description || "";
+    document.getElementById("m-prompt").value = currentAgent.system_prompt;
+  } else {
+    document.getElementById("m-name").value = "";
+    document.getElementById("m-desc").value = "";
+    document.getElementById("m-prompt").value =
+      "You are a helpful agent inside Arikizu. When you need to detect objects, " +
+      "describe a scene, or score an action, call the appropriate video.* capability. " +
+      "Reply in short direct sentences. Say what you did and what you found.";
+  }
+  document.getElementById("modal-bg").classList.add("on");
+}
+
+async function saveAgent() {
+  const name = document.getElementById("m-name").value.trim();
+  const description = document.getElementById("m-desc").value.trim();
+  const system_prompt = document.getElementById("m-prompt").value.trim();
+  if (!name || !system_prompt) { alert("name and system prompt required"); return; }
+  try {
+    if (modalMode === "new") {
+      const a = await callCap("agent.create", {name, description, system_prompt});
+      if (a.error) { alert(a.error); return; }
+      document.getElementById("modal-bg").classList.remove("on");
+      await loadAgents();
+      await selectAgent(a.id);
+    } else if (currentAgent) {
+      const a = await callCap("agent.update", {
+        agent_id: currentAgent.id, name, description, system_prompt,
+      });
+      if (a.error) { alert(a.error); return; }
+      document.getElementById("modal-bg").classList.remove("on");
+      await loadAgents();
+      await selectAgent(a.id);
+    }
+  } catch (e) {
+    alert("save failed: " + e.message);
+  }
+}
+
+// Import the five example agents from examples/agents/.
+// The agent worker reads each JSON directly from disk (server-side),
+// so this works regardless of whether the HTTP server serves examples/.
+async function importExamples() {
+  const files = [
+    "examples/agents/safety-inspector.json",
+    "examples/agents/elder-care-companion.json",
+    "examples/agents/document-reviewer.json",
+    "examples/agents/sensor-triage.json",
+    "examples/agents/retail-floor.json",
+  ];
+  let ok = 0, fail = 0;
+  const errors = [];
+  for (const f of files) {
+    try {
+      const a = await callCap("agent.import", {file_path: f});
+      if (a.error) { fail++; errors.push(`${f}: ${a.error}`); } else { ok++; }
+    } catch (e) {
+      fail++; errors.push(`${f}: ${e.message}`);
+    }
+  }
+  await loadAgents();
+  if (errors.length) console.warn(errors.join("\n"));
+  alert(`Imported ${ok} example agents${fail ? ` (${fail} failed; see console)` : ""}.`);
+}
+document.getElementById("import-examples").onclick = importExamples;
+
+document.getElementById("new-agent").onclick = () => openModal("new");
+document.getElementById("edit-agent").onclick = () => openModal("edit");
+document.getElementById("m-cancel").onclick = () => document.getElementById("modal-bg").classList.remove("on");
+document.getElementById("m-save").onclick = saveAgent;
+document.getElementById("send").onclick = sendMessage;
+document.getElementById("new-conv").onclick = () => {
+  currentConversation = null;
+  document.getElementById("chat-messages").innerHTML =
+    `<div class="empty">New conversation started.</div>`;
+};
+document.getElementById("msg").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage(); }
+});
+
+loadAgents();
+</script>
+</body>
+</html>

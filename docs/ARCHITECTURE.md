@@ -1,11 +1,12 @@
 # Arikizu Architecture
 
 <p align="center">
- <img src="assets/architecture.png" alt="Arikizu architecture" width="900">
+ <img src="assets/architecture-glance.svg" alt="Arikizu architecture" width="900">
 </p>
 
-One Rust binary that supervises ten Python workers. One HTTP surface
-for every capability. One SQLite file for every event. One device, one
+One Rust binary that supervises eleven Python workers (including the
+Video Studio worker for multimodal action search). One HTTP surface for
+every capability. One SQLite file for every event. One device, one
 install, no cloud.
 
 What follows: how it fits together, where state lives, where the
@@ -24,7 +25,7 @@ single, deliberate boundary with the next.
 | ----------------- | ----------------------------------------------------- | ----------------------------- |
 | **Interaction** | How humans and apps talk to Arikizu | HTTP, WebSocket, CLI, browser |
 | **Runtime** | Supervision, routing, policy, device detection | Rust (9 crates) |
-| **Intelligence** | The actual AI work | Python (10 workers, uv) |
+| **Intelligence** | The actual AI work | Python (11 workers, uv) |
 | **Trust** | Everything we promise to remember or enforce | SQLite, YAML, filesystem |
 
 Picture at the top of this file shows the same split visually.
@@ -278,7 +279,7 @@ Writing a new worker is: install the SDK, decorate functions, run.
 
 ## 5. Intelligence zone (Python workers)
 
-Ten workers, each in its own uv package under `workers/`.
+Eleven workers, each in its own uv package under `workers/`.
 
 | Worker | Wraps | Capabilities |
 | ------------ | ------------------------------- | ----------------------------------------------------------------- |
@@ -291,7 +292,16 @@ Ten workers, each in its own uv package under `workers/`.
 | `memory` | adaptive-intelligence | `memory.update`, `memory.recall`, `memory.reward` |
 | `guard` | AntGuard (regex v0.1) | `guard.scan`, `guard.redact` |
 | `eval` | LLMEvalKit | `eval.score`, `eval.golden_run` |
+| `video` | MediaPipe LiteRT + SegFormer int8 + Qwen2.5-VL 3B (optional) | `video.live_detect`, `video.analyze_frame`, `video.live_describe`, `video.recognize_pose`, `video.actions_known`, `video.search_image`, `video.device_report`, `video.backends`, `video.history`, `video.record_analysis` |
 | `feedback` | n/a (handled by ant-feedback) | (Rust-side only) |
+
+The `video` worker is the newest and the most composable. It covers the full
+on-device video-intelligence pipeline: object detection, pose landmarks, scene
+parsing, face privacy blur, 12 rule-based action recognizers, and
+multimodal action search via a local VLM when the hardware supports it.
+Device-aware model selection (see `workers/video_worker/video_worker/devices.py`)
+means the same code path runs on a Pi 4 (rule-based only) and a Jetson
+Orin Nano (full VLM pipeline) without config changes.
 
 Each worker:
 

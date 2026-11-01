@@ -269,14 +269,65 @@ you make a call on any demo page, it appears in Recent Activity within
 
 ---
 
+## 10. Video Studio: multimodal action search
+
+Three input modes, same pipeline. Runs on your device.
+
+- **No prompt**: 12 default rule-based actions (walking, running,
+  sitting, standing, waving, kicking, jumping, hands_up, arms_crossed,
+  bending, falling, pointing).
+- **Text prompt**: type any action phrase. The VLM scores each sampled
+  frame against it. Works for actions outside the default 12.
+- **Reference image**: upload a screenshot of the action. The VLM
+  describes it internally and uses that description to search the clip.
+  This is how new, user-defined actions get found without any training.
+
+**Click-by-click walkthrough:**
+
+1. Open [`/demo/video_studio.html`](http://127.0.0.1:7000/demo/video_studio.html).
+2. Device banner at the top shows your hardware class and the recommended
+   model preset. Pi 4 shows "rule-based only, VLM too slow"; Jetson Orin
+   Nano shows "Full stack with VLM via CUDA".
+3. Click **Webcam** tab. Click **Start webcam**. Allow camera.
+4. Within a second you see detection boxes and the pose skeleton over
+   your body. The action label updates every ~200 ms.
+5. Raise your hand above your head. Label flips to **hands_up**.
+   Cross your arms. Label flips to **arms_crossed**. Walk back and forth
+   in front of the camera. Label flips to **walking**.
+6. Toggle **privacy blur** on. Face region blurs on the overlay.
+7. Type **"a person pointing"** in the webcam prompt. Point at the camera
+   with one arm. Within 5 s the VLM match pill lights green.
+8. Switch to **Video file** tab. Drop any MP4.
+9. Set sampling interval to 1 s. Click **Run analysis**. Timeline bars
+   appear per detected action segment. History tab logs the run.
+10. For a new action not in the 12: upload a reference image showing it,
+    leave the prompt blank, click Run. The worker converts the image to
+    a search phrase first (`video.search_image`), then uses that phrase
+    for frame-by-frame VLM scoring.
+
+**Expected FPS** per device:
+
+| Device | Live FPS (webcam) | VLM latency |
+|---|---|---|
+| Raspberry Pi 4 | 2-3 (rule-based only) | VLM disabled |
+| Jetson Orin Nano | 8-12 (CPU) / 20-30 (GPU) | ~1.8 s per prompt |
+| Mac Apple Silicon | 15-25 | ~0.9 s per prompt |
+| Linux x86_64 modern CPU | 10-15 | ~2.5 s per prompt |
+
+Full test plan including unit tests and end-to-end walkthrough:
+[`docs/VIDEO_STUDIO_TEST.md`](VIDEO_STUDIO_TEST.md).
+
+---
+
 ## What to show someone else
 
 If you have ~5 minutes to demo Arikizu, go in this order:
 
 1. Open `/` (operator dashboard). Point out the device chip and recent activity.
-2. Click **Vision**. Show live annotated frames (or fixture).
-3. Back to `/`, click **Documents**. Extract a field.
-4. Back to `/`, click **Reasoning**. Ask one question.
+2. Open `/demo/video_studio.html`. Open webcam. Show the live action
+   label changing as you move. This is the single most impressive demo.
+3. Click **Documents**. Extract a field.
+4. Click **Reasoning**. Ask one question.
 5. Open `/demo/` (sandbox). Show that every one of those is a plain HTML
    file hitting the same `/api/v1/call/*` surface: no magic, no cloud.
 

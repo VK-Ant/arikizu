@@ -1,4 +1,274 @@
-# Arikizu v1.5
+# Arikizu v1.7
+
+## v1.7.2 (explicit "how to run everything" + smoke-test coverage)
+
+Checkpoint pass: made the full-stack run story explicit in the README
+and added the new workers to the smoke test so `make smoke` actually
+exercises them.
+
+- **README gets a new "Enable the full stack" section** between the
+  5-minute quickstart and the Video Studio section. Four blocks:
+  Video Studio install, Agent Studio notes, MCP server install, and
+  a single copy-paste block that enables everything at once. Verify
+  commands at the bottom.
+- **Smoke test ALL array extended** with six new rows:
+  `video.actions_known`, `video.device_report`, `video.backends`,
+  `agent.policy_default`, `agent.list`, `agent.backends`. These are
+  the backend/diagnostic calls that run everywhere regardless of
+  which heavy models are loaded.
+- No code changes outside the smoke-test list; this is a visibility
+  and docs sweep.
+
+## v1.7.1 (examples/ + agent.import + one-click starting points)
+
+Confirmed the download-and-customize story works end-to-end, then
+made it concrete with a top-level `examples/` tree so people don't
+start from a blank slate.
+
+- `examples/agents/` ships five ready-to-import JSON agents:
+  Safety Inspector (factory PPE), Elder Care Companion (home
+  monitoring), Document Reviewer (contracts with PII redaction),
+  Sensor Triage (time-series anomaly + forecast), Retail Floor
+  Watcher (people count, dwell).
+- `examples/actions/` has a template (`squatting.py`) plus a README
+  showing how to drop a new rule into `video_worker/actions.py`.
+- `examples/mcp-configs/` has `.mcp.json` snippets for Claude Code,
+  Cline, and Cursor.
+- `examples/demo-pages/blank.html` is a minimal page with the shared
+  Arikizu header and palette already wired up; copy, rename, fill in.
+- `examples/README.md` is the index: what every subdirectory contains,
+  the one-liner to import an agent, the one-liner to add an action,
+  the one-liner to wire up MCP.
+
+- New capability `agent.import` that loads a JSON agent from either a
+  dict (`definition`) or a project-relative file path (`file_path`).
+  Added to `capabilities.toml`.
+- `demo/web/agent_studio.html` gets an **Import examples** button that
+  calls `agent.import` for all five shipped agents in one click.
+- `README.md` gets a "Download, customize, use" section just above
+  "Make it yours", pointing at `examples/` with a one-line pitch for
+  each subdirectory.
+
+- New test `test_example_agents_import_shape` validates every shipped
+  agent JSON has `name` + `system_prompt` and a policy that passes
+  `policy.validate_policy`. 14/14 tests now pass (was 13).
+
+## v1.7.0 (Agent Studio, MCP server, Responsible AI governance)
+
+Three new pieces land together because they are one story: custom
+agents + external agents + the governance ring they all operate inside.
+
+**New: workers/agent_worker/** (~900 lines, 4 modules, 13 passing tests)
+
+- `policy.py` — three-action governance (auto / ask / deny) per
+  capability per agent, hard-deny list for platform-level operations,
+  default policy covering 35 capabilities, validator that refuses to
+  override hard-deny.
+- `agents.py` — SQLite-backed agent + conversation + turn storage;
+  CRUD surface for the chat loop and the UI.
+- `tools.py` — tool-call extraction from LLM output (`<tool_call>` JSON
+  blocks), per-call policy dispatch, forwarding to Arikizu HTTP router
+  so every call lands in the central audit log.
+- `__main__.py` — the chat loop: user turn → reasoning worker →
+  extract tool calls → dispatch through policy → feed results back
+  for up to 3 LLM iterations → store assistant turn with every tool
+  call record.
+- 11 new capabilities under `agent.*` registered in capabilities.toml:
+  create, update, delete, list, get, policy_default, allowed_caps,
+  chat, conversation, conversation_list, backends.
+
+**New: mcp/arikizu_mcp_server.py** (~160 lines)
+
+MCP stdio server that exposes a safe subset of 17 Arikizu capabilities
+to external agents (Claude Code, Cline, Cursor, your own framework).
+Every call forwards through the Arikizu HTTP router so policy + audit
++ approval queue all apply. The MCP server is a thin adapter, not a
+bypass. Install guide in `docs/MCP.md`.
+
+**New: demo/web/agent_studio.html** (~380 lines)
+
+Three-pane UI: agent list on the left, chat in the middle, live
+policy panel on the right showing the current agent's auto / ask /
+deny capability sets. Create / edit modal. Every assistant message
+shows attached tool-call records with capability name, policy
+decision badge, and the result preview.
+
+**New docs:**
+
+- `docs/AGENTS.md` — custom agent architecture, policy explanation,
+  tool-call protocol, Agent Studio walkthrough, pointer to MCP for
+  external agents
+- `docs/MCP.md` — install, wire-up for Claude Code / Cline / Cursor,
+  which capabilities are exposed, governance across the boundary,
+  troubleshooting
+- `docs/GOVERNANCE.md` — the Responsible-AI-by-architecture story:
+  four claims, per-entry-point governance table, hard-deny list, how
+  the audit log looks as SQL queries, how it compares to cloud-API
+  governance
+
+**Updated:**
+
+- `README.md` — new top-nav links for Agents, MCP, Governance; new
+  "Custom agents and MCP" section between Video Studio and Make It
+  Yours; architecture Mermaid diagram now shows the MCP adapter path,
+  the Agent Studio worker beside Video Studio, and the dotted
+  "policy enforcement" edge from the agent back to HTTP
+- `docs/assets/architecture-glance.svg` — re-rendered (218 KB)
+- `demo/web/index.html` — hub card #7 added for Agent Studio;
+  diagnostics panel now probes `agent.backends`
+- `capabilities.toml` — new `agent.*` section with 11 rows
+- `workers/pyproject.toml` — `agent_worker` added to the uv workspace
+
+**Hard-deny list** (platform-level, policy cannot override):
+- `feedback.approve`, `feedback.reject` (an agent cannot approve its
+  own calls)
+- `arikizu.shutdown`, `arikizu.restart` (platform control)
+- `arikizu.policy.set` (policy itself cannot be edited by an agent)
+
+Explicitly out of scope for v1.7.0:
+- WebSocket-based approval resumption (operator must poll
+  `feedback.pending` for now)
+- Agent-to-agent delegation (reserved for v1.8)
+- Fine-grained per-user auth (local-user trust still assumed)
+
+Verified: 13/13 policy + tool-call unit tests pass. 11/11 action
+tests still pass. All eight demo pages' inline JS parses clean.
+Mermaid diagram renders to 218 KB SVG. Python modules import cleanly
+regardless of whether MediaPipe / llama-cpp / mcp are installed.
+
+---
+
+# Arikizu v1.6
+
+## v1.6.1 (full doc sweep for Video Studio)
+
+v1.6.0 shipped the worker, demo, Mermaid diagram and VIDEO_STUDIO_TEST
+guide, but six adjacent docs still read as if the Video Studio did not
+exist. Fixed in one pass:
+
+- `docs/ARCHITECTURE.md`: workers table extended to 11 (added `video`
+  worker row with its 10 capabilities and the Qwen2.5-VL note); updated
+  the "eleven workers" wording in the opening paragraph; replaced the
+  stale `assets/architecture.png` reference with the new SVG that was
+  already rendered for the main README.
+- `docs/MODELS.md`: appended a Video Studio models table listing all
+  eight model files (perception + VLM) with sizes, formats, delegate
+  recommendations, and the download command.
+- `docs/DEMO.md`: new section 10 "Video Studio: multimodal action
+  search" with click-by-click walkthrough including the reference-image
+  flow for open-vocabulary actions; "What to show someone else" updated
+  to lead with Video Studio instead of basic vision.
+- `docs/SETUP.md`: device-capability table extended with a Video Studio
+  column showing expected FPS and VLM latency per device, from Pi 4
+  (rule-based only) to AGX Orin.
+- `workers/README.md`: ASCII tree got the `video_worker` entry plus a
+  paragraph on what it covers and the device-aware model picker.
+- `docs/assets/architecture-glance.svg`: re-rendered from the current
+  Mermaid source to pick up any edits.
+
+## v1.6.0 (Video Studio: multimodal action search on edge)
+
+A new worker, a new demo page, a new category of capability. Ported the
+best of VK's local video intelligence POC into Arikizu as a first-class
+worker. Three input modes (no prompt, text prompt, reference image) all
+route into the same pipeline. Runs edge-first: Pi 4 gets rule-based
+action recognition only; Jetson Orin Nano and up get the full stack
+including Qwen2.5-VL 3B.
+
+**New: workers/video_worker/** (10 files, ~1600 lines)
+
+- `__main__.py` — worker entry with 11 capabilities registered
+- `devices.py` — detects device class, computes model-fit per
+  (model, device) pair, picks a recommended preset. The honest
+  "will this actually run on my Pi 4" answer, baked in as a lookup.
+- `models.py` — model registry, download-on-first-use, project-root
+  path resolution (same walk-up pattern as vision/audio workers)
+- `actions.py` — 12 rule-based action recognizers (walking, running,
+  sitting, standing, waving, kicking, jumping, hands_up, arms_crossed,
+  bending, falling, pointing). ~1 ms per frame, no ML inference.
+- `perception.py` — MediaPipe LiteRT wrapper (EfficientDet-Lite0 +
+  Pose Landmarker + BlazeFace), fails gracefully if MediaPipe missing
+- `vlm.py` — Qwen2.5-VL 3B via llama-cpp-python + mmproj; HTTP fallback
+  via ARIKIZU_VLM_ENDPOINT; "none" mode keeps everything else running
+- `motion.py` — Farneback optical flow helpers
+- `history.py` — SQLite history (events + metadata, never frames)
+
+**New capabilities** (12 added to capabilities.toml):
+
+- `video.device_report` — device profile + preset + fit table
+- `video.actions_known` — list of recognized actions with definitions
+- `video.recognize_pose` — pure pose -> action (no model load)
+- `video.live_detect` — one frame -> boxes + pose + action
+- `video.live_describe` — one frame + optional prompt -> VLM score
+- `video.describe_image` — standalone image description
+- `video.search_image` — reference image -> text search phrase
+- `video.analyze_frame` — one sampled frame of a longer clip
+- `video.record_analysis` — persist analysis summary to SQLite
+- `video.history` + `video.history_get` — browse past analyses
+- `video.backends` — which models, deps, VLM backends are up
+
+**New: demo/web/video_studio.html** (~550 lines)
+
+Three tabs under the shared Arikizu header:
+
+- Video file: upload clip or drag-drop, text prompt OR reference image,
+  overlay toolbar (boxes, pose, mask, blur, labels), timeline with
+  action events, HUD showing current-frame action + per-stage latency
+- Webcam: live view with same overlays, text prompt for live VLM
+  action matching, FPS counter, blur toggle on by default
+- History: last 20 analyses
+
+Device banner at the top of every page tells the user up front what
+their hardware can and cannot do, before they hit "Run analysis" and
+discover an OOM.
+
+**New: scripts/download-video-models.sh**
+
+Device-aware. `scripts/download-video-models.sh` fetches perception
+models only (~22 MB). `--with-vlm` adds Qwen2.5-VL 3B GGUF + mmproj
+(~2.7 GB). `--vlm-only` skips the perception stack. All URLs point at
+canonical Hugging Face mirrors; no manual registry edits needed.
+
+**New: workers/video_worker/tests/test_actions.py** (~130 lines, 11 tests)
+
+Each action rule has a passing test with canned pose landmarks that
+match the expected posture. One test asserts the "unknown" floor
+behavior (bad input returns unknown, not a confident guess). One
+regression test asserts ACTIONS_KNOWN and action_definitions stay in
+sync.
+
+**Updated:**
+
+- README.md: new "Video Studio" section with the three-input-mode
+  explanation, link to the demo, and the device-aware model note
+- README.md: Mermaid architecture diagram now shows the Video Studio
+  worker as a highlighted node with its four internal sub-components
+  (Perception, Action, Scene, VLM) visible
+- docs/CUSTOMIZE.md: new section 8 "Customize the Video Studio" with
+  recipes for adding an action, swapping the VLM, adding a device
+  profile, bringing your own perception backend
+- docs/VIDEO_STUDIO_TEST.md: seven-step test plan from unit tests
+  through hardware benchmark through end-to-end browser walkthrough
+- docs/assets/architecture-glance.svg: re-rendered (217 KB)
+- scripts/doctor.sh: new rows for the three main MediaPipe/SegFormer
+  model files
+- demo/web/index.html: 6th card added for Video Studio, diagnostics
+  panel probes `video.backends`
+- capabilities.toml: 12 new rows under a new `video` section
+- workers/pyproject.toml: `video_worker` added to the uv workspace
+
+**Explicitly out of scope** for this version (as requested):
+
+- VideoJev (dropped; needs an NVIDIA GPU with bf16 and a separate server)
+- Hard Ollama dependency (dropped; the POC's provider dropdown is replaced
+  by auto-detection via video.backends)
+
+Verified: 11/11 action unit tests pass under 100 ms. All six demo pages'
+inline JS parses clean. Mermaid diagram renders to 217 KB SVG. Python
+modules import cleanly without MediaPipe or llama-cpp installed (fails
+soft, reports what's missing).
+
+---
 
 ## v1.5.40 (README architecture diagram: Mermaid instead of ASCII)
 

@@ -14,8 +14,21 @@ workers/
 ├── timeseries_worker/ WavqWise; timeseries.forecast, detect_anomaly
 ├── memory_worker/ adaptive-intelligence; memory.recall, update, reward
 ├── guard_worker/ AntGuard; guard.scan, redact, audit
-└── eval_worker/ LLMEvalKit; eval.score, compare, golden_run
+├── eval_worker/ LLMEvalKit; eval.score, compare, golden_run
+└── video_worker/ Video Studio: MediaPipe + SegFormer + Qwen2.5-VL;
+                   video.live_detect, video.analyze_frame, video.live_describe,
+                   video.search_image (reference-image action search),
+                   video.recognize_pose, video.actions_known (12 defaults),
+                   video.device_report, video.backends, video.history
 ```
+
+The `video_worker` is the newest and the most capable. It covers the
+on-device video intelligence stack: object detection + pose + scene
+parsing + privacy blur + click-to-segment + 12 rule-based action
+recognizers + Qwen2.5-VL 3B for open-vocabulary action search. Runs
+on CPU with XNNPACK by default; CUDA / CoreML EP when available. See
+`workers/video_worker/video_worker/devices.py` for the device-aware
+model picker.
 
 ## Setup
 

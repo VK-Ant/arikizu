@@ -113,6 +113,16 @@
         <p>Upload a CSV, TSV, JSON, or Excel file of sensor readings. Forecast the next window and flag anomalies against your own data.</p>
         <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
       </a>
+      <a class="card" href="/demo/video_studio.html">
+        <h3>Video Studio <span class="badge">multimodal action</span></h3>
+        <p>Upload a clip or open your webcam. Give a text prompt or a reference image. Get a timestamped action timeline, pose, scene, boxes and masks. Runs on your device.</p>
+        <span class="pill">video.analyze_frame</span><span class="pill">video.live_detect</span><span class="pill">video.live_describe</span>
+      </a>
+      <a class="card" href="/demo/agent_studio.html">
+        <h3>Agent Studio <span class="badge">custom chatbot</span></h3>
+        <p>Build your own agents. Give them a system prompt, pick which capabilities they may call, and chat. Every tool call is governed by auto / ask / deny policy and logged to audit.</p>
+        <span class="pill">agent.create</span><span class="pill">agent.chat</span><span class="pill">agent.policy_default</span>
+      </a>
     </div>
 
     <h2>One-click smoke test</h2>
@@ -164,6 +174,12 @@ const ALL = [
   ["eval.score", { predicted: "ok", expected: "ok", metrics: ["exact"] }],
   ["eval.compare", { a: "x", b: "x" }],
   ["reasoning.answer", { question: "2+2?", context: "math", max_tokens: 20 }],
+  ["video.actions_known", {}],
+  ["video.device_report", {}],
+  ["video.backends", {}],
+  ["agent.policy_default", {}],
+  ["agent.list", { limit: 5 }],
+  ["agent.backends", {}],
 ];
 
 async function callOne(cap, payload) {
@@ -234,6 +250,12 @@ async function runDiag() {
     {label: "reasoning LLM (SmolLM2 gguf)", cap: "reasoning/backends",
      pass: b => b.gguf_loaded || b.loaded || !!b.gguf_path && b.gguf_path !== "(none)",
      fix: "scripts/download-default-models.sh"},
+    {label: "video stack (MediaPipe + SegFormer)", cap: "video/backends",
+     pass: b => (b.perception?.mediapipe_installed) && (b.models?.models || {}),
+     fix: "cd workers && uv add mediapipe --package video-worker ; scripts/download-video-models.sh"},
+    {label: "agent runtime (reasoning + policy)", cap: "agent/backends",
+     pass: b => b.arikizu_reachable && b.default_policy_size > 0,
+     fix: "ensure the supervisor is up and reasoning_worker is reachable"},
   ];
   for (const c of checks) {
     let row = "";

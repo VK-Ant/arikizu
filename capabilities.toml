@@ -288,6 +288,206 @@ timeout_ms = 120000
 priority = -1
 
 # ---------------------------------------------------------------------------
+# video (Multimodal action search; SightRAG + rule-based + Qwen2.5-VL)
+# ---------------------------------------------------------------------------
+
+[video_device_report]
+name = "video.device_report"
+worker = "video"
+input = {}
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[video_backends]
+name = "video.backends"
+worker = "video"
+input = {}
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[video_actions_known]
+name = "video.actions_known"
+worker = "video"
+input = {}
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[video_recognize_pose]
+name = "video.recognize_pose"
+worker = "video"
+input = { landmarks = "array", visibility = "array", motion_px_per_s = "number" }
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[video_live_detect]
+name = "video.live_detect"
+worker = "video"
+input = { image_base64 = "string", motion_px_per_s = "number" }
+output = "object"
+timeout_ms = 30000
+priority = 0
+
+[video_live_describe]
+name = "video.live_describe"
+worker = "video"
+input = { image_base64 = "string", prompt = "string" }
+output = "object"
+timeout_ms = 60000
+priority = 0
+
+[video_describe_image]
+name = "video.describe_image"
+worker = "video"
+input = { image_base64 = "string" }
+output = "object"
+timeout_ms = 60000
+priority = 0
+
+[video_search_image]
+name = "video.search_image"
+worker = "video"
+input = { image_base64 = "string" }
+output = "object"
+timeout_ms = 60000
+priority = 0
+
+[video_analyze_frame]
+name = "video.analyze_frame"
+worker = "video"
+input = { image_base64 = "string", prompt = "string", time_s = "number", motion_px_per_s = "number" }
+output = "object"
+timeout_ms = 60000
+priority = 0
+
+[video_record_analysis]
+name = "video.record_analysis"
+worker = "video"
+input = { video_name = "string", prompt = "string", events = "array", subjects = "array" }
+output = "object"
+timeout_ms = 10000
+priority = 0
+
+[video_history]
+name = "video.history"
+worker = "video"
+input = { limit = "integer" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[video_history_get]
+name = "video.history_get"
+worker = "video"
+input = { event_id = "integer" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+# ---------------------------------------------------------------------------
+# agent (Custom agents + capability routing + governance)
+# ---------------------------------------------------------------------------
+
+[agent_create]
+name = "agent.create"
+worker = "agent"
+input = { name = "string", description = "string", system_prompt = "string", policy = "object" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_update]
+name = "agent.update"
+worker = "agent"
+input = { agent_id = "string", name = "string", system_prompt = "string", policy = "object" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_delete]
+name = "agent.delete"
+worker = "agent"
+input = { agent_id = "string" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_import]
+name = "agent.import"
+worker = "agent"
+input = { definition = "object", file_path = "string" }
+output = "object"
+timeout_ms = 10000
+priority = 0
+
+[agent_list]
+name = "agent.list"
+worker = "agent"
+input = { limit = "integer" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_get]
+name = "agent.get"
+worker = "agent"
+input = { agent_id = "string" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_policy_default]
+name = "agent.policy_default"
+worker = "agent"
+input = {}
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[agent_allowed_caps]
+name = "agent.allowed_caps"
+worker = "agent"
+input = { agent_id = "string" }
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[agent_chat]
+name = "agent.chat"
+worker = "agent"
+input = { agent_id = "string", conversation_id = "string", message = "string", max_iterations = "integer" }
+output = "object"
+timeout_ms = 300000
+priority = 0
+
+[agent_conversation]
+name = "agent.conversation"
+worker = "agent"
+input = { conversation_id = "string" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_conversation_list]
+name = "agent.conversation_list"
+worker = "agent"
+input = { agent_id = "string", limit = "integer" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+[agent_backends]
+name = "agent.backends"
+worker = "agent"
+input = {}
+output = "object"
+timeout_ms = 5000
+priority = 0
+
+# ---------------------------------------------------------------------------
 # Human-in-the-loop. These are served by ant-feedback directly, not by a
 # worker. The HTTP routes exist regardless; these entries are documentation.
 # ---------------------------------------------------------------------------

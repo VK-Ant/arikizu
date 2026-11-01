@@ -16,6 +16,8 @@ members = [
     "memory_worker",
     "guard_worker",
     "eval_worker",
+    "video_worker",
+    "agent_worker",
 ]
 
 [tool.uv.sources]

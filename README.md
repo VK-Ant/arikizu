@@ -12,6 +12,9 @@
  <a href="QUICKSTART.md">Quickstart</a> ·
  <a href="docs/DEMO.md">Demo walkthrough</a> ·
  <a href="docs/CUSTOMIZE.md">Customize</a> ·
+ <a href="docs/AGENTS.md">Agents</a> ·
+ <a href="docs/MCP.md">MCP</a> ·
+ <a href="docs/GOVERNANCE.md">Governance</a> ·
  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
  <a href="docs/MODELS.md">Models</a> ·
  <a href="docs/HOW_IT_RUNS.md">How it runs</a> ·
@@ -143,6 +146,99 @@ yolov8n.onnx, silero_vad.onnx, SmolLM2 GGUF, supervisor http) and the
 exact fix line for each failure. Most "nothing works" problems are one
 missing model file; `scripts/download-default-models.sh` fixes that.
 
+---
+
+## Enable the full stack (Video Studio + Agent Studio + MCP)
+
+The 5-minute quickstart runs the base workers (vision, audio, docs,
+reasoning, timeseries, memory, guard, eval, test). The newer workers
+and the MCP server are opt-in because they have heavier dependencies.
+
+### Video Studio
+
+Needs MediaPipe LiteRT and optionally llama-cpp-python for the VLM.
+
+```bash
+# Perception stack: object detection, pose, segment, scene parse (~22 MB)
+cd workers && uv add mediapipe --package video-worker
+cd ..
+scripts/download-video-models.sh
+
+# Optional: Qwen2.5-VL 3B for open-vocabulary action search (~2.7 GB)
+cd workers && uv add llama-cpp-python --package video-worker
+cd ..
+scripts/download-video-models.sh --with-vlm
+
+# Restart
+pkill -f arikizu; make run
+```
+
+Open `http://127.0.0.1:7000/demo/video_studio.html`. The device banner
+at the top tells you which models were loaded and what FPS to expect
+on your hardware.
+
+### Agent Studio
+
+No extra deps; the worker is in the base install. Just make sure the
+reasoning worker has a working backend (local GGUF, HTTP endpoint, or
+built-in KB).
+
+Open `http://127.0.0.1:7000/demo/agent_studio.html`. Click **Import
+examples** to load five ready-made agents, then chat with one.
+
+Or import from the command line:
+
+```bash
+curl -X POST http://127.0.0.1:7000/api/v1/call/agent/import \
+  -H 'content-type: application/json' \
+  -d '{"payload": {"file_path": "examples/agents/safety-inspector.json"}}'
+```
+
+### MCP server (external agents call Arikizu)
+
+```bash
+pip install mcp httpx
+export ARIKIZU_HTTP=http://127.0.0.1:7000
+python3 mcp/arikizu_mcp_server.py          # test it runs
+```
+
+Then wire it up to Claude Code / Cline / Cursor using one of the config
+snippets in [`examples/mcp-configs/`](examples/mcp-configs/). Replace
+the `/ABSOLUTE/PATH/TO/arikizu` placeholder with your checkout path.
+
+### All at once (one terminal, copy-paste)
+
+```bash
+# From the arikizu/ root, after `make build && make run` in another terminal:
+cd workers && uv add mediapipe llama-cpp-python --package video-worker
+cd ..
+scripts/download-video-models.sh --with-vlm
+pip install mcp httpx
+pkill -f arikizu && make run
+# Open http://127.0.0.1:7000/demo/ in your browser
+```
+
+Then:
+
+```bash
+# Import the 5 example agents
+for a in safety-inspector elder-care-companion document-reviewer sensor-triage retail-floor; do
+  curl -s -X POST http://127.0.0.1:7000/api/v1/call/agent/import \
+    -H 'content-type: application/json' \
+    -d "{\"payload\":{\"file_path\":\"examples/agents/${a}.json\"}}" | head -c 100
+  echo
+done
+```
+
+### Verify every piece is live
+
+```bash
+make doctor                                    # system-level checks
+curl -s http://127.0.0.1:7000/api/v1/status    # workers running
+# Open each demo page in a browser; the Diagnostics panel on /demo/
+# shows a green READY tag per subsystem.
+```
+
 Call a capability by hand:
 
 ```
@@ -158,6 +254,96 @@ through the same path.
 
 Full demo walkthrough with screenshots and expected outputs:
 [`docs/DEMO.md`](docs/DEMO.md).
+
+---
+
+## Video Studio: multimodal action search
+
+Upload a clip or open your webcam. Give the system a text prompt, a reference
+image, or nothing at all. Get back a timestamped list of actions, who and what
+is in the scene, how fast they are moving, and the room they are in. Everything
+runs on your device.
+
+Three inputs, same pipeline:
+
+1. **No prompt.** Default rule-based recognition over 12 actions (walking,
+   running, sitting, standing, waving, kicking, jumping, hands-up, arms-crossed,
+   bending, falling, pointing).
+2. **Text prompt.** "A person waving at the camera." The VLM scores every
+   sampled frame against the prompt.
+3. **Reference image.** Drop a screenshot of the action you want to find. The
+   VLM describes it, then searches the target video.
+
+Backbone: MediaPipe LiteRT (object detection, pose landmarks, segmentation,
+face privacy), SegFormer-B0 int8 for scene parsing, dense optical flow for
+motion, multi-object tracking with trails. All on CPU with XNNPACK, GPU
+delegate on Jetson. Qwen2.5-VL 3B Q4_K_M on top for open-vocabulary action
+search when the VLM is available.
+
+**Device-aware model selection.** On page load the demo calls
+`video.device_report` and shows which model preset is recommended for your
+hardware. On a Pi 4 you see the rule-based path only. On a Jetson Orin Nano
+or newer, the VLM is enabled. The table of fit per device is shipped as
+code in [`workers/video_worker/video_worker/devices.py`](workers/video_worker/video_worker/devices.py).
+
+Open [`http://127.0.0.1:7000/demo/video_studio.html`](http://127.0.0.1:7000/demo/video_studio.html).
+
+---
+
+## Custom agents and MCP
+
+Two ways to build on top of Arikizu's capabilities, both governed by
+the same policy and audit layer.
+
+**Agent Studio.** Create your own chatbots inside Arikizu. Give each
+agent a name, a system prompt, and a policy (which capabilities it may
+call directly, which require human approval, which are refused). The
+agent runs in `agent_worker`, talks via the local reasoning worker,
+emits tool calls, and the dispatcher enforces the policy before any
+call reaches another worker. Full UI at
+[`/demo/agent_studio.html`](http://127.0.0.1:7000/demo/agent_studio.html).
+Guide: [`docs/AGENTS.md`](docs/AGENTS.md).
+
+**MCP server.** For agents that live OUTSIDE Arikizu (Claude Code,
+Cline, Cursor, your own framework), Arikizu ships an MCP server at
+[`mcp/arikizu_mcp_server.py`](mcp/arikizu_mcp_server.py). It exposes a
+safe subset of capabilities as MCP tools. External agents call them
+like any other tool; the calls still land on the HTTP router and go
+through the global policy and audit. Guide:
+[`docs/MCP.md`](docs/MCP.md).
+
+**Responsible AI by architecture.** Policy + audit + approval are not a
+layer bolted on. The system is designed so that governance is a thin,
+local, auditable ring around a runtime whose data never leaves the
+device. Four claims and the SQL queries that verify them:
+[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md).
+
+---
+
+## Download, customize, use
+
+**Everything in this repo is Apache 2.0.** Clone it, fork it, strip
+parts you don't need, add parts you do, ship your own product on top.
+No attribution required for the code; the bundled model files keep
+their own upstream licenses (see `models/NOTICE.md`).
+
+Ready-to-use starting points live in [`examples/`](examples/):
+
+- [`examples/agents/`](examples/agents/) — five ready-to-import JSON
+  agents (Safety Inspector, Elder Care Companion, Document Reviewer,
+  Sensor Triage, Retail Floor Watcher). One `curl` or one click in the
+  Agent Studio imports all five.
+- [`examples/actions/`](examples/actions/) — custom action rules you
+  can drop into `video_worker/actions.py` (squatting, reaching_up,
+  looking_down, hugging, thumbs_up). Each is one function, no training.
+- [`examples/mcp-configs/`](examples/mcp-configs/) — `.mcp.json`
+  snippets for Claude Code, Cline, and Cursor.
+- [`examples/demo-pages/blank.html`](examples/demo-pages/blank.html) —
+  blank HTML template with the shared Arikizu header and palette; copy
+  and fill in to start your own demo page in one step.
+
+See [`examples/README.md`](examples/README.md) for the full list and
+the one-liner commands to import each one into a running Arikizu.
 
 ---
 
@@ -332,12 +518,13 @@ Full architecture reference: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (als
 flowchart TB
     subgraph INTERACTION[" Interaction "]
         direction LR
-        UI["Browser UI<br/>operator dashboard + dev sandbox"]
+        UI["Browser UI<br/>operator dashboard + studios"]
         CLI["CLI<br/>arikizu run"]
+        EXT["External agents<br/>Claude Code · Cline · Cursor"]
     end
 
+    MCP["<b>MCP Server</b><br/>mcp/arikizu_mcp_server.py<br/>stdio adapter"]
     HTTP["<b>HTTP / WebSocket API</b><br/>ant-http · audit log · approval queue"]
-
     SUP["<b>Supervisor + Capability Router</b><br/>ant-supervisor · ant-router · policy"]
 
     subgraph WORKERS[" Python workers (Unix socket) "]
@@ -348,12 +535,16 @@ flowchart TB
         W4["Reasoning<br/>local LLM"]
         W5["Timeseries<br/>WavqWise"]
         W6["Guard<br/>AntGuard"]
+        W7["<b>Video Studio</b><br/>multimodal action search"]
+        W8["<b>Agent Studio</b><br/>custom agents + policy"]
     end
 
-    FB["<b>Feedback Manager</b><br/>audit · approvals · golden set"]
+    FB["<b>Governance</b><br/>policy · audit · approvals · feedback<br/>golden set"]
 
     UI --> HTTP
     CLI --> HTTP
+    EXT --> MCP
+    MCP --> HTTP
     HTTP --> SUP
     SUP --> W1
     SUP --> W2
@@ -361,19 +552,25 @@ flowchart TB
     SUP --> W4
     SUP --> W5
     SUP --> W6
+    SUP --> W7
+    SUP --> W8
     SUP <--> FB
     HTTP <--> FB
+    W8 -.policy enforcement.-> HTTP
 
     classDef zone fill:transparent,stroke:#c75c2a,stroke-width:1px,color:#c75c2a
     classDef runtime fill:#1f1f18,stroke:#c75c2a,stroke-width:2px,color:#f0f0ec
     classDef worker fill:#1a1a14,stroke:#4a4a3e,stroke-width:1px,color:#f0f0ec
+    classDef highlight fill:#1a1a14,stroke:#e07a4a,stroke-width:2px,color:#f0f0ec
     classDef trust fill:#1a1a14,stroke:#2d8a4e,stroke-width:2px,color:#f0f0ec
-    classDef interact fill:#1a1a14,stroke:#4a4a3e,stroke-width:1px,color:#f0f0ec
+    classDef mcp fill:#1a1a14,stroke:#c89520,stroke-width:2px,color:#f0f0ec
 
     class INTERACTION,WORKERS zone
-    class UI,CLI interact
+    class UI,CLI,EXT worker
     class HTTP,SUP runtime
     class W1,W2,W3,W4,W5,W6 worker
+    class W7,W8 highlight
+    class MCP mcp
     class FB trust
 ```
 

@@ -1,0 +1,12 @@
+{
+  "_comment": "Save this to .mcp.json at the root of a Claude Code project, or merge into ~/.claude.json. Replace /ABSOLUTE/PATH with your actual Arikizu checkout path.",
+  "mcpServers": {
+    "arikizu": {
+      "command": "python3",
+      "args": ["/ABSOLUTE/PATH/TO/arikizu/mcp/arikizu_mcp_server.py"],
+      "env": {
+        "ARIKIZU_HTTP": "http://127.0.0.1:7000"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "_comment": "For Cursor: Settings -> MCP -> Add new MCP Server, paste this. Replace /ABSOLUTE/PATH with your Arikizu checkout.",
+  "mcpServers": {
+    "arikizu": {
+      "command": "python3",
+      "args": ["/ABSOLUTE/PATH/TO/arikizu/mcp/arikizu_mcp_server.py"],
+      "env": {
+        "ARIKIZU_HTTP": "http://127.0.0.1:7000"
+      }
+    }
+  }
+}

@@ -379,3 +379,29 @@ Convert on a build machine, not on the Pi.
 | the vision model | `yolo export model=yolov8n.pt format=onnx` | `format=tflite` | `format=openvino` |
 
 Keep source + converted + sidecar `.json` manifest with SHA-256 in `models/`.
+
+---
+
+## Video Studio models (new in v1.6.0)
+
+The Video Studio worker uses six model families, all quantized and
+downloaded on first use into `models/`.
+
+| Key | File | Size | Format | Device fit |
+|---|---|---|---|---|
+| `efficientdet_lite0` | `efficientdet_lite0.tflite` | 4.5 MB | float16 (LiteRT) | all |
+| `pose_landmarker_lite` | `pose_landmarker_lite.task` | 5.8 MB | float16 (LiteRT) | all |
+| `blaze_face` | `blaze_face_short_range.tflite` | 0.2 MB | float16 (LiteRT) | all |
+| `selfie_segmenter` | `selfie_segmenter.tflite` | 0.5 MB | float16 (LiteRT) | all |
+| `magic_touch` | `magic_touch.tflite` | 6.0 MB | float32 (LiteRT) | all |
+| `segformer_b0_int8` | `segformer_b0_ade20k_512_int8.onnx` | 4.4 MB | int8 (ONNX) | all; CUDA EP on Jetson, CoreML on Mac |
+| `qwen2_5_vl_3b_q4` | `Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf` | ~2.0 GB | int4 (GGUF) | Jetson Orin Nano and up |
+| `qwen2_5_vl_3b_mmproj` | `Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf` | ~700 MB | f16 (GGUF) | pair with the Q4 GGUF |
+
+Downloaded by `scripts/download-video-models.sh` (perception only, ~22 MB)
+or `scripts/download-video-models.sh --with-vlm` (add VLM, ~2.7 GB total).
+
+The video worker picks which models to actually load based on the detected
+device class. See `workers/video_worker/video_worker/devices.py` for the
+full (model, device) fit table including expected ms per frame and the
+delegate (`cpu-xnnpack`, `cuda`, `coreml`).
