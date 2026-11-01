@@ -39,12 +39,20 @@ def _b64_to_rgb_np(image_base64: str):
 
 def _fix_hint_for(backend_tag: str, err: str) -> str:
     """Return a specific fix command for a given error class."""
+    err_low = err.lower()
+    # Catch the libGL error specifically; it looks like "no-mediapipe" at
+    # import time but is really a missing system library.
+    if "libgl" in err_low or "libgl.so" in err_low or "shared object" in err_low:
+        return ("MediaPipe needs system libraries not installed on your box. "
+                "Run: scripts/install-video-system-deps.sh "
+                "then: pkill -9 -f arikizu && make run")
     if backend_tag == "no-mediapipe":
         return "cd workers && uv add mediapipe --package video-worker && cd .. && pkill -9 -f arikizu && make run"
     if backend_tag == "no-models":
         return "scripts/download-video-models.sh"
     if backend_tag == "missing-system-lib":
-        return "sudo apt install -y libgl1 libglib2.0-0 ; then: pkill -9 -f arikizu && make run"
+        return ("scripts/install-video-system-deps.sh  "
+                "(installs libgl1 libglib2.0-0 libsm6 libxext6 libxrender1)")
     return "check video_worker logs; call /api/v1/call/video/backends for diagnostic"
 
 
@@ -102,14 +110,29 @@ def main() -> None:
             "perception_init": {"ok": False, "detail": ""},
             "inference_runs": {"ok": False, "detail": "", "ms": None},
         }
-        # Stage 1: MediaPipe import
+        # Stage 1: MediaPipe import.
+        # Note: a libGL-missing error LOOKS like an import failure. Detect
+        # it specifically and route to the system-dep install, not a
+        # pointless 'uv add mediapipe' retry.
         if perception_mod.MP_OK:
             results["mediapipe_import"]["ok"] = True
             results["mediapipe_import"]["detail"] = "import works"
         else:
-            results["mediapipe_import"]["detail"] = perception_mod.MP_IMPORT_ERR
+            err = perception_mod.MP_IMPORT_ERR
+            results["mediapipe_import"]["detail"] = err
             results["overall"] = "FAIL"
-            results["fix"] = "cd workers && uv add mediapipe --package video-worker ; pkill -9 -f arikizu && make run"
+            err_low = err.lower()
+            if "libgl" in err_low or "libgl.so" in err_low or "shared object" in err_low:
+                results["fix"] = (
+                    "The Python package IS installed but a system library it needs is missing. "
+                    "Run: scripts/install-video-system-deps.sh "
+                    "then: pkill -9 -f arikizu && make run"
+                )
+                results["mediapipe_import"]["detail"] = (
+                    f"{err}  <-- this is a system library missing, NOT the Python package"
+                )
+            else:
+                results["fix"] = "cd workers && uv add mediapipe --package video-worker ; pkill -9 -f arikizu && make run"
             return results
         # Stage 2: model files present
         required_keys = [preset["detector"], preset["pose"], "blaze_face"]

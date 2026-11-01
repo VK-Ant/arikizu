@@ -152,9 +152,31 @@ missing model file; `scripts/download-default-models.sh` fixes that.
 
 ### "Video Studio shows unknown / 0 objects / 0 people"
 
-The video stack is MISSING. MediaPipe isn't installed in the video
-worker's venv yet, OR the install succeeded but the running supervisor
-is still using the old venv. Run everything below in order:
+The video stack is MISSING. One of three things is wrong, in order of
+how often each is the culprit:
+
+1. **System libraries not installed** (most common on fresh WSL /
+   Ubuntu / cloud VMs). MediaPipe's Python package imports fine on its
+   own, but it needs `libgl1`, `libglib2.0-0`, `libsm6`, `libxext6`,
+   `libxrender1` to actually run inference. Fix:
+
+   ```bash
+   scripts/install-video-system-deps.sh
+   pkill -9 -f arikizu && make run
+   ```
+
+2. **MediaPipe Python package not installed** in the video_worker venv.
+3. **Model files not downloaded**.
+
+Run the honest self-test and it tells you exactly which stage broke:
+
+```bash
+curl -sS -X POST http://127.0.0.1:7000/api/v1/call/video/selftest \
+  -H 'content-type: application/json' -d '{"payload":{}}' | python3 -m json.tool
+```
+
+The `fix` field in the response is the exact command to run. If you
+want the full install from scratch:
 
 ```bash
 cd ~/arikizu/workers
