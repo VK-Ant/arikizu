@@ -250,9 +250,9 @@ async function runDiag() {
     {label: "reasoning LLM (SmolLM2 gguf)", cap: "reasoning/backends",
      pass: b => b.gguf_loaded || b.loaded || !!b.gguf_path && b.gguf_path !== "(none)",
      fix: "scripts/download-default-models.sh"},
-    {label: "video stack (MediaPipe + SegFormer)", cap: "video/backends",
-     pass: b => (b.perception?.mediapipe_installed) && (b.models?.models || {}),
-     fix: "cd workers && uv add mediapipe --package video-worker ; scripts/download-video-models.sh"},
+    {label: "video stack (actually runs inference on a test image)", cap: "video/selftest",
+     pass: b => b.overall === "PASS",
+     fix: "see video.selftest.fix field or run: cd workers && uv add mediapipe --package video-worker ; scripts/download-video-models.sh ; pkill -9 -f arikizu && make run"},
     {label: "agent runtime (reasoning + policy)", cap: "agent/backends",
      pass: b => b.arikizu_reachable && b.default_policy_size > 0,
      fix: "ensure the supervisor is up and reasoning_worker is reachable"},
@@ -272,13 +272,24 @@ async function runDiag() {
       // etc.) and we also show the paths it actually looked at.
       let why = "loaded";
       if (!ok) {
-        const err = b.load_error || b.note || "";
-        const path = b.model_path || b.vad_path || b.gguf_path || "(unset)";
-        const dir  = b.models_dir ? ` dir=${b.models_dir}` : "";
-        const cwd  = b.cwd ? ` cwd=${b.cwd}` : "";
-        why = err
-          ? `${err}<br><small style="color:var(--muted)">path=${path}${dir}${cwd}</small>`
-          : `run: ${c.fix}`;
+        // For video.selftest, show the per-stage pass/fail with the fix.
+        if (c.cap === "video/selftest" && b.mediapipe_import) {
+          const stages = ["mediapipe_import", "models_present", "perception_init", "inference_runs"];
+          const lines = stages.map(s => {
+            const st = b[s] || {};
+            const icon = st.ok ? "ok" : "FAIL";
+            return `${icon}: ${s.replace(/_/g, " ")} - ${st.detail || ""}`;
+          });
+          why = lines.join("<br>") + `<br><strong>fix:</strong> ${b.fix || c.fix}`;
+        } else {
+          const err = b.load_error || b.note || "";
+          const path = b.model_path || b.vad_path || b.gguf_path || "(unset)";
+          const dir  = b.models_dir ? ` dir=${b.models_dir}` : "";
+          const cwd  = b.cwd ? ` cwd=${b.cwd}` : "";
+          why = err
+            ? `${err}<br><small style="color:var(--muted)">path=${path}${dir}${cwd}</small>`
+            : `run: ${c.fix}`;
+        }
       }
       row = `
         <div class="smoke-row">

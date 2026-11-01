@@ -37,6 +37,17 @@ def _b64_to_rgb_np(image_base64: str):
     return np.array(img), data
 
 
+def _fix_hint_for(backend_tag: str, err: str) -> str:
+    """Return a specific fix command for a given error class."""
+    if backend_tag == "no-mediapipe":
+        return "cd workers && uv add mediapipe --package video-worker && cd .. && pkill -9 -f arikizu && make run"
+    if backend_tag == "no-models":
+        return "scripts/download-video-models.sh"
+    if backend_tag == "missing-system-lib":
+        return "sudo apt install -y libgl1 libglib2.0-0 ; then: pkill -9 -f arikizu && make run"
+    return "check video_worker logs; call /api/v1/call/video/backends for diagnostic"
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -78,6 +89,73 @@ def main() -> None:
     def device_report() -> dict[str, Any]:
         """Device profile + recommended preset + per-model fit table."""
         return devices.report()
+
+    @worker.handler("video.selftest")
+    def selftest() -> dict[str, Any]:
+        """Actually run the perception stack against a 640x480 synthetic
+        image and report per-stage pass/fail with the exact error.
+        Call this when the diagnostic says READY but detections don't show."""
+        import numpy as np
+        results: dict[str, Any] = {
+            "mediapipe_import": {"ok": False, "detail": ""},
+            "models_present": {"ok": False, "detail": "", "missing": []},
+            "perception_init": {"ok": False, "detail": ""},
+            "inference_runs": {"ok": False, "detail": "", "ms": None},
+        }
+        # Stage 1: MediaPipe import
+        if perception_mod.MP_OK:
+            results["mediapipe_import"]["ok"] = True
+            results["mediapipe_import"]["detail"] = "import works"
+        else:
+            results["mediapipe_import"]["detail"] = perception_mod.MP_IMPORT_ERR
+            results["overall"] = "FAIL"
+            results["fix"] = "cd workers && uv add mediapipe --package video-worker ; pkill -9 -f arikizu && make run"
+            return results
+        # Stage 2: model files present
+        required_keys = [preset["detector"], preset["pose"], "blaze_face"]
+        missing = [k for k in required_keys if not models.is_present(k)]
+        if not missing:
+            results["models_present"]["ok"] = True
+            results["models_present"]["detail"] = "all required model files present"
+        else:
+            results["models_present"]["detail"] = f"missing: {', '.join(missing)}"
+            results["models_present"]["missing"] = missing
+            results["overall"] = "FAIL"
+            results["fix"] = "scripts/download-video-models.sh"
+            return results
+        # Stage 3: perception init
+        try:
+            per = _get_perception()
+            results["perception_init"]["ok"] = True
+            results["perception_init"]["detail"] = f"delegate={perception_mod.MP_DELEGATE}"
+        except Exception as e:
+            results["perception_init"]["detail"] = str(e)
+            results["overall"] = "FAIL"
+            results["fix"] = _fix_hint_for("init-failed", str(e))
+            return results
+        # Stage 4: run inference on a synthetic 640x480 image
+        try:
+            import time
+            fake_rgb = np.full((480, 640, 3), 128, dtype=np.uint8)
+            # Draw a dark rectangle so the detector has SOMETHING to look at
+            fake_rgb[150:350, 220:420] = 60
+            t = time.perf_counter()
+            frame_result = per.process(fake_rgb)
+            ms = round((time.perf_counter() - t) * 1000, 1)
+            results["inference_runs"]["ok"] = True
+            results["inference_runs"]["detail"] = (
+                f"inference completed in {ms} ms; "
+                f"detections={len(frame_result.detections)}, "
+                f"pose_landmarks={len(frame_result.pose_landmarks)}, "
+                f"faces={len(frame_result.faces)}"
+            )
+            results["inference_runs"]["ms"] = ms
+            results["overall"] = "PASS"
+        except Exception as e:
+            results["inference_runs"]["detail"] = f"inference failed: {e}"
+            results["overall"] = "FAIL"
+            results["fix"] = _fix_hint_for("inference-failed", str(e))
+        return results
 
     @worker.handler("video.backends")
     def backends() -> dict[str, Any]:
@@ -147,13 +225,35 @@ def main() -> None:
         try:
             per = _get_perception()
         except Exception as e:
+            # Figure out which specific failure this is. Giving the user
+            # "no-mediapipe" when the real problem is a missing model file
+            # or a system-lib issue sends them chasing the wrong fix.
+            backend_tag = "init-failed"
+            err_str = str(e)
+            if "mediapipe" in err_str.lower() and ("not installed" in err_str.lower()
+                                                   or "no module" in err_str.lower()):
+                backend_tag = "no-mediapipe"
+            elif "download" in err_str.lower() or "could not" in err_str.lower():
+                backend_tag = "no-models"
+            elif "libgl" in err_str.lower() or "shared" in err_str.lower():
+                backend_tag = "missing-system-lib"
             return {
                 "frame": per_result_to_dict_empty(rgb.shape[1], rgb.shape[0]),
                 "action": {"action": "unknown", "confidence": 0.0, "evidence": {}},
-                "note": str(e),
-                "backend": "no-mediapipe",
+                "note": err_str,
+                "backend": backend_tag,
+                "fix_hint": _fix_hint_for(backend_tag, err_str),
             }
-        result = per.process(rgb)
+        try:
+            result = per.process(rgb)
+        except Exception as e:
+            return {
+                "frame": per_result_to_dict_empty(rgb.shape[1], rgb.shape[0]),
+                "action": {"action": "unknown", "confidence": 0.0, "evidence": {}},
+                "note": f"inference failed: {e}",
+                "backend": "inference-failed",
+                "fix_hint": "Check video_worker logs. Common cause: GPU delegate requested on a system without GPU support; set MP_DELEGATE=cpu and restart.",
+            }
         # Pose -> action
         action = {"action": "unknown", "confidence": 0.0, "evidence": {}, "scores": {}}
         if result.pose_landmarks:

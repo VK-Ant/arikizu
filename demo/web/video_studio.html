@@ -256,9 +256,23 @@ async function loadDevice() {
   }
   try {
     const b = await callCap("video.backends");
+    const perc = b.perception || {};
     const vlm = b.vlm || {};
     const vlmEl = document.getElementById("d-vlm");
-    if (vlm.mode === "none") {
+
+    // Make MediaPipe-not-installed VERY loud. Everything else on this
+    // page is pointless if perception is dead.
+    if (!perc.mediapipe_installed) {
+      vlmEl.innerHTML = `
+        <span class="status-tag missing">MediaPipe NOT INSTALLED</span>
+        <div style="color:var(--fail);font-size:11px;margin-top:4px;max-width:700px">
+          Perception is down. Nothing on this page will show detections until you fix this.<br>
+          <strong>Run on your terminal, then restart Arikizu:</strong><br>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:3px;display:inline-block;margin-top:4px">
+            cd workers &amp;&amp; uv add mediapipe --package video-worker &amp;&amp; cd .. &amp;&amp; scripts/download-video-models.sh &amp;&amp; pkill -f arikizu &amp;&amp; make run
+          </code>
+        </div>`;
+    } else if (vlm.mode === "none") {
       vlmEl.innerHTML = '<span class="status-tag optional">VLM optional</span>';
     } else {
       vlmEl.innerHTML = `<span class="status-tag ready">VLM ${vlm.mode}</span>`;
@@ -527,6 +541,26 @@ async function startCam() {
       const b64 = c.toDataURL("image/jpeg", 0.6).split(",")[1];
       try {
         const r = await callCap("video.live_detect", {image_base64: b64});
+        // If MediaPipe isn't installed, say so in the status line IMMEDIATELY
+        // every tick. Loud is better than hidden.
+        // If perception stack failed for any reason, show the specific error
+        // and fix hint, not a generic "no detection".
+        const broken = ["no-mediapipe", "no-models", "missing-system-lib",
+                        "init-failed", "inference-failed"];
+        if (broken.includes(r.backend)) {
+          const label = {
+            "no-mediapipe": "MediaPipe not installed in video_worker venv",
+            "no-models": "MediaPipe model files not downloaded",
+            "missing-system-lib": "A system library needed by MediaPipe is missing",
+            "init-failed": "Perception init failed",
+            "inference-failed": "Perception inference failed",
+          }[r.backend];
+          document.getElementById("cam-status").innerHTML =
+            `<span style="color:var(--fail)">${label}</span><br>` +
+            `<span style="font-size:10px;color:var(--muted)">${(r.note || "").slice(0, 300)}</span><br>` +
+            `<span style="font-size:10px;color:var(--accent)">fix: ${r.fix_hint || "see docs"}</span>`;
+          return;
+        }
         drawFrame(camOverlay, r, {
           boxes: true, pose: true,
           blur: document.getElementById("cam-blur").checked,
@@ -539,6 +573,8 @@ async function startCam() {
         document.getElementById("cam-ms-detect").textContent = ms.detect || "—";
         document.getElementById("cam-ms-pose").textContent = ms.pose || "—";
         document.getElementById("cam-ms-face").textContent = ms.face || "—";
+        document.getElementById("cam-status").textContent = "running";
+        document.getElementById("cam-status").style.color = "var(--pass)";
       } catch (e) {
         document.getElementById("cam-status").textContent = "error: " + e.message;
       }

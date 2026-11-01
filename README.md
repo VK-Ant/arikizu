@@ -152,18 +152,45 @@ missing model file; `scripts/download-default-models.sh` fixes that.
 
 ### "Video Studio shows unknown / 0 objects / 0 people"
 
-The video stack is MISSING on the Diagnostics panel. MediaPipe isn't
-installed yet. One command fixes it:
+The video stack is MISSING. MediaPipe isn't installed in the video
+worker's venv yet, OR the install succeeded but the running supervisor
+is still using the old venv. Run everything below in order:
 
 ```bash
-cd workers
+cd ~/arikizu/workers
+
+# Install MediaPipe into the video-worker package
 uv add mediapipe --package video-worker
+
+# Confirm it imports (should print a version number, not an error)
+uv run --package video-worker python3 -c "import mediapipe; print(mediapipe.__version__)"
+
+# Confirm the model files download
 cd ..
 scripts/download-video-models.sh
-pkill -f arikizu && make run
+ls -la models/efficientdet_lite0.tflite models/pose_landmarker_lite.task
+
+# Hard restart (the running supervisor caches the old venv)
+pkill -9 -f arikizu
+sleep 2
+make run
 ```
 
-The webcam and video analysis should work immediately after restart.
+The Video Studio banner at the top of the page will show a red
+`MediaPipe NOT INSTALLED` warning with the fix command until this is
+actually working. If the warning disappears and detections start
+showing, you are done.
+
+Still broken? Call the backends endpoint and read the diagnostic:
+
+```bash
+curl -sS -X POST http://127.0.0.1:7000/api/v1/call/video/backends \
+  -H 'content-type: application/json' -d '{"payload":{}}' | python3 -m json.tool
+```
+
+`perception.mediapipe_installed` must be `true`. If it is `false`, the
+import failed; the `perception.mediapipe_error` field tells you why
+(usually a missing system lib like `libgl1`).
 
 ### "Agent Studio gives generic / wrong answers"
 

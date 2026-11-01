@@ -307,6 +307,14 @@ output = "object"
 timeout_ms = 5000
 priority = 0
 
+[video_selftest]
+name = "video.selftest"
+worker = "video"
+input = {}
+output = "object"
+timeout_ms = 15000
+priority = 0
+
 [video_actions_known]
 name = "video.actions_known"
 worker = "video"
