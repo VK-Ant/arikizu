@@ -960,6 +960,16 @@ const PARSE_PALETTE = [
 let segSceneResult = null;
 let segIsolatedIdx = null;
 
+// Classes SegFormer catches almost every unknown pixel into. If we tint
+// these on top of the image they drown everything else out, so hide
+// them from the overlay by default. The sidebar still lists them so the
+// user can toggle them on and download them.
+const SEG_BACKGROUND_CLASSES = new Set([
+  "wall", "floor", "ceiling", "sky", "earth", "road", "grass", "sidewalk",
+  "sand", "field", "path",
+]);
+let segHideBackground = true;
+
 document.getElementById("seg-scene-parse").onclick = async () => {
   if (!segSourceB64) {
     document.getElementById("seg-status").textContent = "load an image first (file or Snap from webcam)";
@@ -997,23 +1007,47 @@ function renderClassesPanel(result) {
     panel.innerHTML = `<div style="color:var(--muted);font-size:11px">no classes found</div>`;
     return;
   }
-  const rows = classes.map((c, idx) => {
-    const color = PARSE_PALETTE[idx % PARSE_PALETTE.length];
+  // Keep original (dominant-first) order but mark background rows so the
+  // sidebar reads: foreground objects at top, catch-all background at
+  // bottom. This matches what the overlay now draws by default.
+  const sortedClasses = classes
+    .map((c, i) => ({...c, orig_idx: i,
+                     is_bg: SEG_BACKGROUND_CLASSES.has(c.class_name)}))
+    .sort((a, b) => {
+      if (a.is_bg !== b.is_bg) return a.is_bg ? 1 : -1;
+      return b.fill_fraction - a.fill_fraction;
+    });
+  const rows = sortedClasses.map(c => {
+    const color = PARSE_PALETTE[c.orig_idx % PARSE_PALETTE.length];
     const pct = (c.fill_fraction * 100).toFixed(1);
+    const bgTag = c.is_bg ? `<span style="font-size:9px;color:var(--muted);background:var(--bg);padding:1px 5px;border-radius:3px;margin-left:5px">background</span>` : "";
+    const faded = c.is_bg && segHideBackground ? "opacity:0.55;" : "";
     return `
-      <div class="scene-row" data-idx="${idx}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer">
+      <div class="scene-row" data-idx="${c.orig_idx}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;${faded}">
         <span style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0;display:inline-block"></span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:12px">${c.class_name}</div>
+          <div style="font-weight:600;font-size:12px">${c.class_name}${bgTag}</div>
           <div style="font-size:10px;color:var(--muted);font-family:var(--mono)">${pct}% · ${c.pixel_count.toLocaleString()} px</div>
         </div>
-        <button class="sec" data-dl="${idx}" style="padding:4px 10px;font-size:11px;border-radius:4px">Download</button>
+        <button class="sec" data-dl="${c.orig_idx}" style="padding:4px 10px;font-size:11px;border-radius:4px">Download</button>
       </div>`;
   }).join("");
   panel.innerHTML = `
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click a row to isolate on canvas. Download saves the cropped PNG with alpha mask.</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="seg-hide-bg" ${segHideBackground ? "checked" : ""}>
+      Hide catch-all backgrounds (wall, floor, sky, ceiling) from overlay
+    </label>
     ${rows}
     <button id="seg-reset-isolate" class="sec" style="margin-top:8px;width:100%;font-size:11px">Show all classes</button>`;
+  const bgCheckbox = document.getElementById("seg-hide-bg");
+  if (bgCheckbox) {
+    bgCheckbox.onchange = (e) => {
+      segHideBackground = e.target.checked;
+      drawSceneParse(segSceneResult, segIsolatedIdx);
+      renderClassesPanel(segSceneResult);     // re-render fade state
+    };
+  }
   panel.querySelectorAll(".scene-row").forEach(row => {
     row.onclick = (ev) => {
       if (ev.target.hasAttribute("data-dl")) return;   // let download button own its click
@@ -1166,11 +1200,15 @@ function drawSceneParse(result, isolateIdx) {
     img.src = "data:image/png;base64," + c.mask_png_base64;
     return;
   }
-  // Full mode: tint every class
+  // Full mode: tint every class the user didn't filter out. By
+  // default background catch-all classes (wall, floor, ceiling, sky)
+  // are skipped so meaningful foreground objects (person, door, poster)
+  // read clearly against the base image.
   let colorIdx = 0;
   for (const c of classes) {
     const color = PARSE_PALETTE[colorIdx % PARSE_PALETTE.length];
     colorIdx++;
+    if (segHideBackground && SEG_BACKGROUND_CLASSES.has(c.class_name)) continue;
     const img = new Image();
     const colorForClosure = color;
     const classForClosure = c;
