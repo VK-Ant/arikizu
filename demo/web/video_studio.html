@@ -1012,10 +1012,13 @@ document.getElementById("seg-everything").onclick = async () => {
     renderClassesPanel(combined);
     const yn = yoloInstances.length;
     const sn = sceneClasses.length;
+    const errMsgs = [];
+    if (yr.error) errMsgs.push(`<span style="color:var(--fail)">YOLO failed: ${yr.error}</span>`);
+    if (sr.error) errMsgs.push(`<span style="color:var(--fail)">SegFormer failed: ${sr.error}</span>`);
     document.getElementById("seg-status").innerHTML =
-      `<b>Segment Everything</b>: ${yn} YOLO instance(s) + ${sn} scene class(es) on ${combined.provider || "cpu"}` +
-      (yr.error ? ` <span style="color:var(--fail)">· YOLO error: ${yr.error}</span>` : "") +
-      (sr.error ? ` <span style="color:var(--fail)">· SegFormer error: ${sr.error}</span>` : "");
+      `<b>${yn + sn} segment${yn + sn !== 1 ? "s" : ""} ready</b> (${yn} objects + ${sn} scene classes). ` +
+      `<b style="color:var(--accent)">Hit "Download all"</b> in the sidebar, or Download any single one.` +
+      (errMsgs.length ? `<br><span style="font-size:11px">${errMsgs.join(" · ")}</span>` : "");
     document.getElementById("seg-point").textContent = "combined";
     document.getElementById("seg-ms").textContent = combined.ms;
   } catch (e) {
@@ -1139,13 +1142,33 @@ function renderClassesPanel(result) {
       </div>`;
   }).join("");
   panel.innerHTML = `
-    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Every class gets a colored outline + label pill on the canvas. Click a row to isolate. Download saves cropped PNG with alpha.</div>
+    <div style="padding:10px 12px;background:rgba(255,107,26,0.1);border:1px solid rgba(255,107,26,0.3);border-radius:8px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-weight:700;font-size:13px">${classes.length} segment${classes.length !== 1 ? "s" : ""} ready</div>
+        <div style="font-size:11px;color:var(--muted)">PNG with transparent background, cropped tight</div>
+      </div>
+      <button id="seg-dl-all" style="font-size:12px;padding:6px 14px">Download all</button>
+    </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:8px;cursor:pointer">
       <input type="checkbox" id="seg-hide-bg" ${segHideBackground ? "checked" : ""}>
       Hide catch-all backgrounds (wall, floor, sky, ceiling)
     </label>
     ${rows}
-    <button id="seg-reset-isolate" class="sec" style="margin-top:8px;width:100%;font-size:11px">Show all classes</button>`;
+    <button id="seg-reset-isolate" class="sec" style="margin-top:8px;width:100%;font-size:11px">Show all on canvas</button>`;
+  // Download-all handler
+  const dlAll = document.getElementById("seg-dl-all");
+  if (dlAll) {
+    dlAll.onclick = async () => {
+      dlAll.disabled = true;
+      dlAll.textContent = "downloading...";
+      for (let i = 0; i < classes.length; i++) {
+        await downloadClass(i);
+        await new Promise(r => setTimeout(r, 120));   // stagger
+      }
+      dlAll.disabled = false;
+      dlAll.textContent = "Download all";
+    };
+  }
   const bgCheckbox = document.getElementById("seg-hide-bg");
   if (bgCheckbox) {
     bgCheckbox.onchange = (e) => {

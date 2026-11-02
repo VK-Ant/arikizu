@@ -66,6 +66,28 @@ if (( VLM_ONLY == 0 )); then
     printf '\nscene parsing (SegFormer int8):\n'
     fetch "https://huggingface.co/Xenova/segformer-b0-finetuned-ade-512-512/resolve/main/onnx/model_quantized.onnx" \
           "segformer_b0_ade20k_512_int8.onnx" || true
+
+    printf '\ninstance segmentation (YOLOv8n-seg ONNX, 80 COCO classes):\n'
+    # Walk multiple community mirrors; the first that returns a real file wins.
+    YOLO_URLS=(
+        "https://huggingface.co/skytnt/yolov8n-seg/resolve/main/yolov8n-seg.onnx"
+        "https://huggingface.co/onnx-community/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
+        "https://huggingface.co/Xenova/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
+        "https://huggingface.co/kadirnar/yolov8-ONNX/resolve/main/yolov8n-seg.onnx"
+    )
+    YOLO_OK=0
+    for url in "${YOLO_URLS[@]}"; do
+        if [[ -f "$MODELS_DIR/yolov8n-seg.onnx" && -s "$MODELS_DIR/yolov8n-seg.onnx" ]]; then
+            YOLO_OK=1; break
+        fi
+        if fetch "$url" "yolov8n-seg.onnx"; then
+            YOLO_OK=1; break
+        fi
+    done
+    if (( YOLO_OK == 0 )); then
+        printf '  %s!!  all yolov8n-seg mirrors failed. Instance segmentation will be unavailable.%s\n' \
+               "$YELLOW" "$RESET"
+    fi
 fi
 
 if (( WITH_VLM == 1 )); then

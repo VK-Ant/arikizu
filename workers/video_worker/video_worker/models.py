@@ -121,9 +121,17 @@ REGISTRY: dict[str, dict[str, Any]] = {
     },
     # Instance segmentation (per-object masks, COCO 80 classes).
     # Nano variant is ~13 MB and runs on Pi 5 + Jetson easily.
+    # Primary URL + fallback mirrors (ultralytics doesn't host ONNX
+    # directly; the community hubs do). ensure() walks them in order.
     "yolov8n_seg": {
         "file": "yolov8n-seg.onnx",
-        "url": f"{HF_BASE}/qualcomm/YOLOv8-Segmentation/resolve/main/YOLOv8-Segmentation.onnx",
+        "url": f"{HF_BASE}/skytnt/yolov8n-seg/resolve/main/yolov8n-seg.onnx",
+        "mirrors": [
+            f"{HF_BASE}/skytnt/yolov8n-seg/resolve/main/yolov8n-seg.onnx",
+            f"{HF_BASE}/onnx-community/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx",
+            f"{HF_BASE}/Xenova/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx",
+            f"{HF_BASE}/kadirnar/yolov8-ONNX/resolve/main/yolov8n-seg.onnx",
+        ],
         "mb": 13.0, "backend": "onnx", "license": "AGPL-3.0",
         "purpose": "YOLOv8-nano instance segmentation (per-object masks, 80 classes)",
     },
@@ -170,25 +178,45 @@ def ensure(key: str) -> Path:
         ) from e
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     print(f"[video_worker.models] downloading {spec['file']} (~{spec['mb']} MB)...", flush=True)
-    try:
-        with tempfile.NamedTemporaryFile(dir=MODELS_DIR, suffix=".part", delete=False) as tmp:
-            part = Path(tmp.name)
-            with httpx.stream("GET", spec["url"], timeout=120, follow_redirects=True) as r:
-                r.raise_for_status()
-                for chunk in r.iter_bytes(1 << 16):
-                    tmp.write(chunk)
-        if part.stat().st_size < 50_000:
-            raise RuntimeError("downloaded file is too small to be a model")
-        part.replace(dest)
-    except Exception as exc:
+
+    # Walk the mirror list in order. "url" is the canonical URL and is
+    # always tried first; "mirrors" (optional) provides alternates. Each
+    # 404 or timeout moves to the next entry; only after ALL fail do we
+    # raise with the manual-fix instructions.
+    urls: list[str] = [spec["url"]] + list(spec.get("mirrors") or [])
+    # De-dup while preserving order
+    seen: set[str] = set()
+    urls = [u for u in urls if not (u in seen or seen.add(u))]
+
+    last_error: Exception | None = None
+    for url in urls:
         try:
-            part.unlink(missing_ok=True)   # noqa: F821 (part defined inside try)
-        except Exception:
-            pass
-        raise RuntimeError(
-            f"Could not download {spec['file']}: {exc}. "
-            f"Download it manually from {spec['url']} and save it as {dest}"
-        ) from exc
+            with tempfile.NamedTemporaryFile(dir=MODELS_DIR, suffix=".part", delete=False) as tmp:
+                part = Path(tmp.name)
+                with httpx.stream("GET", url, timeout=120, follow_redirects=True) as r:
+                    r.raise_for_status()
+                    for chunk in r.iter_bytes(1 << 16):
+                        tmp.write(chunk)
+            if part.stat().st_size < 50_000:
+                raise RuntimeError("downloaded file is too small to be a model")
+            part.replace(dest)
+            print(f"[video_worker.models] ok: {dest} (from {url})", flush=True)
+            return dest
+        except Exception as exc:
+            last_error = exc
+            try:
+                part.unlink(missing_ok=True)   # noqa: F821
+            except Exception:
+                pass
+            print(f"[video_worker.models] mirror failed: {url} ({exc})", flush=True)
+            continue
+
+    raise RuntimeError(
+        f"Could not download {spec['file']} from any of {len(urls)} mirror(s). "
+        f"Last error: {last_error}. "
+        f"Try one of these URLs manually and save as {dest}: " +
+        ", ".join(urls)
+    )
     print(f"[video_worker.models] ok: {dest}", flush=True)
     return dest
 
