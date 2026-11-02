@@ -960,15 +960,13 @@ const PARSE_PALETTE = [
 let segSceneResult = null;
 let segIsolatedIdx = null;
 
-// Classes SegFormer catches almost every unknown pixel into. If we tint
-// these on top of the image they drown everything else out, so hide
-// them from the overlay by default. The sidebar still lists them so the
-// user can toggle them on and download them.
+// Classes SegFormer treats as catch-all. Still rendered, just with a
+// quieter outline so foreground objects pop. User can toggle them off.
 const SEG_BACKGROUND_CLASSES = new Set([
   "wall", "floor", "ceiling", "sky", "earth", "road", "grass", "sidewalk",
   "sand", "field", "path",
 ]);
-let segHideBackground = true;
+let segHideBackground = false;
 
 document.getElementById("seg-scene-parse").onclick = async () => {
   if (!segSourceB64) {
@@ -1033,10 +1031,10 @@ function renderClassesPanel(result) {
       </div>`;
   }).join("");
   panel.innerHTML = `
-    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click a row to isolate on canvas. Download saves the cropped PNG with alpha mask.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Every class gets a colored outline + label pill on the canvas. Click a row to isolate. Download saves cropped PNG with alpha.</div>
     <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:8px;cursor:pointer">
       <input type="checkbox" id="seg-hide-bg" ${segHideBackground ? "checked" : ""}>
-      Hide catch-all backgrounds (wall, floor, sky, ceiling) from overlay
+      Hide catch-all backgrounds (wall, floor, sky, ceiling)
     </label>
     ${rows}
     <button id="seg-reset-isolate" class="sec" style="margin-top:8px;width:100%;font-size:11px">Show all classes</button>`;
@@ -1183,62 +1181,102 @@ function drawSceneParse(result, isolateIdx) {
       octx.globalCompositeOperation = "source-in";
       octx.drawImage(segSourceImage, 0, 0, W, H);
       ctx.drawImage(off, 0, 0);
-      // Tint outline + label
-      if (c.bbox) {
-        const [x0, y0, x1, y1] = c.bbox;
-        ctx.strokeStyle = color; ctx.lineWidth = 3;
-        ctx.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
-        const label = `${c.class_name} - ${(c.fill_fraction*100).toFixed(0)}%`;
-        ctx.font = "bold 16px system-ui, sans-serif";
-        const w = ctx.measureText(label).width + 14;
-        ctx.fillStyle = color;
-        ctx.fillRect(x0 * W, y0 * H, w, 24);
-        ctx.fillStyle = "#000";
-        ctx.fillText(label, x0 * W + 7, y0 * H + 18);
-      }
+      // Draw a crisp outline around the isolated class
+      drawClassOutline(ctx, img, c, color, W, H, false);
     };
     img.src = "data:image/png;base64," + c.mask_png_base64;
     return;
   }
-  // Full mode: tint every class the user didn't filter out. By
-  // default background catch-all classes (wall, floor, ceiling, sky)
-  // are skipped so meaningful foreground objects (person, door, poster)
-  // read clearly against the base image.
+  // Full mode: draw CRISP outlines around each class's mask + a label
+  // pill at the top-left of its bbox. No big tint fills - the base
+  // image stays visible underneath, every object has its own clean
+  // colored boundary.
   let colorIdx = 0;
   for (const c of classes) {
     const color = PARSE_PALETTE[colorIdx % PARSE_PALETTE.length];
     colorIdx++;
     if (segHideBackground && SEG_BACKGROUND_CLASSES.has(c.class_name)) continue;
+    const isBg = SEG_BACKGROUND_CLASSES.has(c.class_name);
     const img = new Image();
-    const colorForClosure = color;
-    const classForClosure = c;
     img.onload = () => {
-      const off = document.createElement("canvas");
-      off.width = W; off.height = H;
-      const octx = off.getContext("2d");
-      octx.drawImage(img, 0, 0, W, H);
-      octx.globalCompositeOperation = "source-in";
-      octx.fillStyle = colorForClosure;
-      octx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 0.42;
-      ctx.drawImage(off, 0, 0);
-      ctx.globalAlpha = 1.0;
-      if (classForClosure.bbox) {
-        const [x0, y0, x1, y1] = classForClosure.bbox;
-        ctx.strokeStyle = colorForClosure;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
-        const label = `${classForClosure.class_name} ${(classForClosure.fill_fraction * 100).toFixed(0)}%`;
-        ctx.font = "bold 14px system-ui, sans-serif";
-        const w = ctx.measureText(label).width + 10;
-        ctx.fillStyle = colorForClosure;
-        ctx.fillRect(x0 * W, y0 * H, w, 20);
-        ctx.fillStyle = "#000";
-        ctx.fillText(label, x0 * W + 5, y0 * H + 15);
-      }
+      drawClassOutline(ctx, img, c, color, W, H, isBg);
     };
     img.src = "data:image/png;base64," + c.mask_png_base64;
   }
+}
+
+/**
+ * Draw a 2-3 px outline around the mask region in the given color,
+ * then a rounded label pill at the mask's bbox top-left.
+ */
+function drawClassOutline(ctx, maskImg, cls, color, W, H, isBg) {
+  // Edge extraction: draw the mask, then erode (destination-out shifted
+  // copies in 8 directions). What remains is the ring at the boundary.
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d");
+  octx.drawImage(maskImg, 0, 0, W, H);
+  const SHIFTS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
+  octx.globalCompositeOperation = "destination-out";
+  for (const [dx, dy] of SHIFTS) octx.drawImage(maskImg, dx, dy, W, H);
+  // Thicken: draw the ring onto itself with shifts to give a 2-px stroke
+  const ring = document.createElement("canvas");
+  ring.width = W; ring.height = H;
+  const rctx = ring.getContext("2d");
+  rctx.drawImage(off, 0, 0);
+  for (const [dx, dy] of SHIFTS) rctx.drawImage(off, dx, dy);
+  // Colorize the ring
+  rctx.globalCompositeOperation = "source-in";
+  rctx.fillStyle = color;
+  rctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = isBg ? 0.55 : 1.0;
+  ctx.drawImage(ring, 0, 0);
+  ctx.globalAlpha = 1.0;
+  // Label pill
+  drawClassLabel(ctx, cls, color, W, H);
+}
+
+function drawClassLabel(ctx, cls, color, W, H) {
+  if (!cls.bbox) return;
+  const [x0, y0] = cls.bbox;
+  const px = x0 * W;
+  const py = y0 * H;
+  const label = `${cls.class_name} · ${(cls.fill_fraction * 100).toFixed(0)}%`;
+  ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+  const padX = 10, padY = 6, dotR = 4;
+  const textW = ctx.measureText(label).width;
+  const pillW = textW + padX * 2 + dotR * 2 + 6;
+  const pillH = 24;
+  // Nudge the pill so it never falls off the top edge
+  const pillY = Math.max(0, py - pillH - 2);
+  // Rounded dark pill with a colored dot and white text
+  roundedRect(ctx, px, pillY, pillW, pillH, 12);
+  ctx.fillStyle = "rgba(10,10,10,0.88)";
+  ctx.fill();
+  // Dot
+  ctx.beginPath();
+  ctx.arc(px + padX + dotR, pillY + pillH / 2, dotR, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Text
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, px + padX + dotR * 2 + 6, pillY + pillH / 2);
+  ctx.textBaseline = "alphabetic";
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 segCanvas.addEventListener("click", async (e) => {
