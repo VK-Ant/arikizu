@@ -131,7 +131,7 @@ def load_dir(root: Path, include_examples: bool = False) -> dict[str, Pipeline]:
     if include_examples:
         glob_root += sorted((root / "examples").glob("*.yaml"))
     for path in glob_root:
-        if path.name.startswith(("_", ".")):
+        if path.name.startswith(("_", ".")) or path.name.endswith(".example"):
             continue
         for p in load_file(path):
             if p.name in out:

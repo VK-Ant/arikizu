@@ -154,7 +154,7 @@ Do these in order. Don't skip. Each step takes 1-10 minutes.
 
 ```bash
 cd ~
-unzip -o arikizu-v1.9.0.zip
+unzip -o arikizu-v1.9.1.zip
 cd ~/arikizu
 ```
 
@@ -525,6 +525,11 @@ The built-in demos (vision, audio, docs, timeseries, agents) all go
 through the same path your custom code uses. Drop in two files, your
 capability behaves identically to the built-ins — same HTTP API, same
 policy enforcement, same audit log.
+
+**Opt-in by design.** The custom worker is disabled by default so a
+fresh install has no required steps. Enable it only when you have
+your own logic to add. See [`custom/README.md`](custom/README.md) for
+the two-step enable + a working `_hello.py.example`.
 
 **File 1 — Python handler** in `custom/`:
 

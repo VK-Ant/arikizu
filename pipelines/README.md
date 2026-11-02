@@ -7,6 +7,32 @@ You pick a trigger (what starts it), name the stages (what runs), and
 each stage's output can feed the next stage's input. The runtime
 handles execution, policy enforcement, and audit logging.
 
+## Why this exists (and why you might not need it)
+
+**If you only call one capability at a time, you don't need pipelines.**
+The HTTP API, a Python app, or an agent is enough.
+
+Use pipelines when you want to compose several capability calls into
+one unit of work that:
+- Runs on a schedule (every 5 minutes, every night at 2am, every hour)
+- Chains outputs together without writing a Python wrapper
+- Needs a human approval step in the middle
+- Should log the full chain to the audit database as one event
+
+If none of those apply, skip the pipeline worker. Everything else in
+Arikizu works without it.
+
+## To enable the pipeline worker
+
+1. In `arikizu.yaml`, uncomment the `pipeline` block in the `workers:` list.
+2. Rename `_hello.yaml.example` to `hello.yaml` (drop the leading
+   underscore AND the `.example` suffix). This is the demo pipeline;
+   skip if you want to start from scratch.
+3. `make run` (or restart the supervisor).
+
+Files starting with `_` or `.` are deliberately skipped so the demo
+sits dormant until you ask for it.
+
 ## What works today vs. roadmap
 
 | Feature | Status |

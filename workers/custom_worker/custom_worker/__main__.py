@@ -82,7 +82,7 @@ def _load_user_files(custom_dir: Path) -> list[str]:
     loaded: list[str] = []
     sys.path.insert(0, str(custom_dir))     # so files can `import` siblings
     for path in sorted(custom_dir.glob("*.py")):
-        if path.name.startswith(("_", ".")):
+        if path.name.startswith(("_", ".")) or path.name.endswith(".example"):
             continue
         mod_name = f"arikizu_custom_{path.stem}"
         spec = importlib.util.spec_from_file_location(mod_name, path)
@@ -106,7 +106,7 @@ def _snapshot_dir(custom_dir: Path) -> dict[str, float]:
     if not custom_dir.is_dir():
         return out
     for path in custom_dir.glob("*.py"):
-        if path.name.startswith(("_", ".")):
+        if path.name.startswith(("_", ".")) or path.name.endswith(".example"):
             continue
         try:
             out[path.name] = path.stat().st_mtime

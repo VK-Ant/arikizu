@@ -3,6 +3,39 @@
 **This is where you drop your own logic.** Any Python file you add
 here becomes an Arikizu capability without touching the main code.
 
+## Why this exists (and why you might not need it)
+
+Arikizu ships with ~60 built-in capabilities covering vision, audio,
+documents, reasoning, timeseries, guard, and more. **If those cover
+what you need, you don't need the custom worker at all** — just call
+them from the HTTP API, from an agent, or from a pipeline.
+
+Use the custom worker when:
+- You have your own ML model, algorithm, or calculation that the
+  built-ins don't cover (e.g. your company's pricing logic, a legacy
+  rule engine, a specific industry heuristic)
+- You want to wrap an external service (your CRM, your database, an
+  internal API) as an Arikizu capability so agents and pipelines can
+  call it
+- You want to extend a built-in capability with your own
+  post-processing
+
+If none of those apply, leave the custom worker disabled. The main
+runtime does not need it. Arikizu works end-to-end with zero custom
+code.
+
+## To enable the custom worker
+
+1. In `arikizu.yaml`, uncomment the `custom` block in the `workers:` list.
+2. Rename `_hello.py.example` to `hello.py` and
+   `../capabilities.d/_hello.toml.example` to `hello.toml` (drop the
+   leading underscore AND the `.example` suffix). Those are the demo files;
+   skip step 2 if you want to start from scratch.
+3. `make run` (or restart the supervisor).
+
+Files starting with `_` or `.` are deliberately skipped so the demo
+sits dormant until you ask for it.
+
 ## Two files per capability
 
 ### 1. Your Python handler — in this folder

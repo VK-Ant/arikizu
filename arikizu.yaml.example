@@ -55,22 +55,32 @@ workers:
     module: guard_worker
     args: [run, --package, guard-worker, python, -m, guard_worker]
     cwd: ./workers
-  # custom_worker scans ./custom/*.py and exposes every @worker.handler
-  # function as a capability. Drop a file in custom/ to add your own
-  # logic without editing anything else. See custom/README.md.
-  - name: custom
-    python: uv
-    module: custom_worker
-    args: [run, --package, custom-worker, python, -m, custom_worker]
-    cwd: ./workers
-  # pipeline_worker loads YAML pipelines from ./pipelines/*.yaml, runs
+
+  # -------------------------------------------------------------------------
+  # OPTIONAL workers. Uncomment the block for the one you want.
+  # Arikizu runs fine without either; enable them when you actually need
+  # the feature. See custom/README.md and pipelines/README.md for why
+  # each one exists.
+  # -------------------------------------------------------------------------
+
+  # custom_worker: scans ./custom/*.py and exposes every @worker.handler
+  # function as a capability. Enable when you want to add your own
+  # business logic in Python without writing a full worker from scratch.
+  #- name: custom
+  #  python: uv
+  #  module: custom_worker
+  #  args: [run, --package, custom-worker, python, -m, custom_worker]
+  #  cwd: ./workers
+
+  # pipeline_worker: loads YAML pipelines from ./pipelines/*.yaml, runs
   # scheduled triggers, and exposes pipeline.list / pipeline.run /
-  # pipeline.reload + the three meta-capabilities. See pipelines/README.md.
-  - name: pipeline
-    python: uv
-    module: pipeline_worker
-    args: [run, --package, pipeline-worker, python, -m, pipeline_worker]
-    cwd: ./workers
+  # pipeline.reload + three meta-capabilities. Enable when you want to
+  # chain capabilities declaratively instead of writing code.
+  #- name: pipeline
+  #  python: uv
+  #  module: pipeline_worker
+  #  args: [run, --package, pipeline-worker, python, -m, pipeline_worker]
+  #  cwd: ./workers
 
 # ---------------------------------------------------------------------------
 # Pipeline

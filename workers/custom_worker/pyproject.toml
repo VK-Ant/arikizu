@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "Loads user Python files from custom/ and exposes them as capabilities."
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "arikizu-worker",
+    "arikizu-worker-sdk",
 ]
 
 [tool.uv.sources]
-arikizu-worker = { workspace = true }
+arikizu-worker-sdk = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

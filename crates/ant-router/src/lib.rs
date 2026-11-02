@@ -59,12 +59,12 @@ impl CapabilityRegistry {
                         .flatten()
                         .filter_map(|e| {
                             let p = e.path();
-                            if p.extension().and_then(|s| s.to_str()) == Some("toml")
-                                && !p.file_name()
-                                    .and_then(|s| s.to_str())
-                                    .map(|s| s.starts_with('.') || s.starts_with('_'))
-                                    .unwrap_or(false)
-                            {
+                            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                            let is_toml = p.extension().and_then(|s| s.to_str()) == Some("toml");
+                            let skipped = name.starts_with('.')
+                                || name.starts_with('_')
+                                || name.ends_with(".example");
+                            if is_toml && !skipped {
                                 Some(p)
                             } else {
                                 None

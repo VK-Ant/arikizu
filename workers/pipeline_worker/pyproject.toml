@@ -4,14 +4,14 @@ version = "0.1.0"
 description = "YAML pipeline runtime: load, schedule, execute user pipelines."
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "arikizu-worker",
+    "arikizu-worker-sdk",
     "pyyaml>=6.0",
     "croniter>=1.4",
     "httpx>=0.25",
 ]
 
 [tool.uv.sources]
-arikizu-worker = { workspace = true }
+arikizu-worker-sdk = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
