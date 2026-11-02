@@ -211,10 +211,20 @@ def ensure(key: str) -> Path:
             print(f"[video_worker.models] mirror failed: {url} ({exc})", flush=True)
             continue
 
+    # Model-specific fallback hint. For yolov8n-seg, the guaranteed fix
+    # is a local ultralytics export; mention it inline.
+    extra_hint = ""
+    if key == "yolov8n_seg":
+        extra_hint = (
+            " Guaranteed fallback: `pip install ultralytics && "
+            "python -c \"from ultralytics import YOLO; "
+            "YOLO('yolov8n-seg.pt').export(format='onnx', imgsz=640)\" && "
+            f"mv yolov8n-seg.onnx {dest}`."
+        )
     raise RuntimeError(
         f"Could not download {spec['file']} from any of {len(urls)} mirror(s). "
-        f"Last error: {last_error}. "
-        f"Try one of these URLs manually and save as {dest}: " +
+        f"Last error: {last_error}.{extra_hint} "
+        f"Or try one of these URLs manually and save as {dest}: " +
         ", ".join(urls)
     )
     print(f"[video_worker.models] ok: {dest}", flush=True)

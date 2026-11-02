@@ -68,25 +68,63 @@ if (( VLM_ONLY == 0 )); then
           "segformer_b0_ade20k_512_int8.onnx" || true
 
     printf '\ninstance segmentation (YOLOv8n-seg ONNX, 80 COCO classes):\n'
-    # Walk multiple community mirrors; the first that returns a real file wins.
-    YOLO_URLS=(
-        "https://huggingface.co/skytnt/yolov8n-seg/resolve/main/yolov8n-seg.onnx"
-        "https://huggingface.co/onnx-community/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
-        "https://huggingface.co/Xenova/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
-        "https://huggingface.co/kadirnar/yolov8-ONNX/resolve/main/yolov8n-seg.onnx"
-    )
     YOLO_OK=0
-    for url in "${YOLO_URLS[@]}"; do
-        if [[ -f "$MODELS_DIR/yolov8n-seg.onnx" && -s "$MODELS_DIR/yolov8n-seg.onnx" ]]; then
-            YOLO_OK=1; break
-        fi
-        if fetch "$url" "yolov8n-seg.onnx"; then
-            YOLO_OK=1; break
-        fi
-    done
+    if [[ -f "$MODELS_DIR/yolov8n-seg.onnx" && -s "$MODELS_DIR/yolov8n-seg.onnx" ]]; then
+        printf '%s  --  yolov8n-seg.onnx already present%s\n' "$YELLOW" "$RESET"
+        YOLO_OK=1
+    else
+        # Walk community mirrors first (fast, no deps).
+        YOLO_URLS=(
+            "https://huggingface.co/skytnt/yolov8n-seg/resolve/main/yolov8n-seg.onnx"
+            "https://huggingface.co/onnx-community/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
+            "https://huggingface.co/Xenova/yolov8n-seg/resolve/main/onnx/yolov8n-seg.onnx"
+            "https://huggingface.co/kadirnar/yolov8-ONNX/resolve/main/yolov8n-seg.onnx"
+        )
+        for url in "${YOLO_URLS[@]}"; do
+            if fetch "$url" "yolov8n-seg.onnx"; then
+                YOLO_OK=1; break
+            fi
+        done
+    fi
+
+    # Guaranteed fallback: generate the ONNX locally via ultralytics.
+    # The .pt file (6.5 MB) downloads from the ultralytics GitHub release,
+    # then torch converts it to ONNX. First-run cost is torch install.
     if (( YOLO_OK == 0 )); then
-        printf '  %s!!  all yolov8n-seg mirrors failed. Instance segmentation will be unavailable.%s\n' \
-               "$YELLOW" "$RESET"
+        printf '%s  ..  mirrors failed. Falling back to local ultralytics export (needs torch).%s\n' \
+               "$GREY" "$RESET"
+        if ! command -v python3 >/dev/null 2>&1; then
+            printf '  %s!!  python3 not found; cannot auto-export.%s\n' "$YELLOW" "$RESET"
+        else
+            if ! python3 -c "import ultralytics" 2>/dev/null; then
+                printf '  .. installing ultralytics (one-time)...\n'
+                pip install --quiet ultralytics 2>&1 | tail -2 || true
+            fi
+            if python3 - <<PYEOF 2>&1
+import shutil, sys
+try:
+    from ultralytics import YOLO
+except ImportError as e:
+    print(f"ultralytics not installed: {e}"); sys.exit(1)
+model = YOLO("yolov8n-seg.pt")        # downloads .pt from ultralytics release
+exported = model.export(format="onnx", imgsz=640, opset=12)
+shutil.move(str(exported), "$MODELS_DIR/yolov8n-seg.onnx")
+print("ok", "$MODELS_DIR/yolov8n-seg.onnx")
+PYEOF
+            then
+                if [[ -f "$MODELS_DIR/yolov8n-seg.onnx" ]]; then
+                    printf '%s  ok  yolov8n-seg.onnx exported locally via ultralytics%s\n' "$GREEN" "$RESET"
+                    YOLO_OK=1
+                fi
+            fi
+        fi
+    fi
+
+    if (( YOLO_OK == 0 )); then
+        printf '  %s!!  yolov8n-seg.onnx not obtained. Run manually:%s\n' "$YELLOW" "$RESET"
+        printf '      pip install ultralytics\n'
+        printf '      python -c "from ultralytics import YOLO; YOLO('"'"'yolov8n-seg.pt'"'"').export(format=\\"onnx\\", imgsz=640)"\n'
+        printf '      mv yolov8n-seg.onnx %s/\n' "$MODELS_DIR"
     fi
 fi
 
