@@ -69,11 +69,83 @@ if (( VLM_ONLY == 0 )); then
 fi
 
 if (( WITH_VLM == 1 )); then
-    printf '\nmultimodal VLM (Qwen2.5-VL 3B Q4_K_M, ~2 GB + mmproj ~700 MB):\n'
-    fetch "https://huggingface.co/bartowski/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
-          "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" || true
-    fetch "https://huggingface.co/bartowski/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf" \
-          "Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf" || true
+    printf '\nmultimodal VLM (OPTIONAL, for reference-image action search):\n'
+    # Save the FAILURES counter: VLM mirror retries use fetch() which
+    # increments it, but those are not real failures (the next mirror
+    # may succeed). We restore the counter after the VLM block.
+    FAILURES_BEFORE_VLM=$FAILURES
+    VLM_OK=0
+
+    # Lightweight VLM-only fetch (does NOT touch FAILURES counter).
+    try_vlm_pair() {
+        local model_url="$1" model_file="$2" mmproj_url="$3" mmproj_file="$4" label="$5"
+        printf '  .. trying %s mirror...\n' "$label"
+        local m="$MODELS_DIR/$model_file" p="$MODELS_DIR/$mmproj_file"
+        if curl --fail --location --silent --show-error --retry 2 --connect-timeout 15 \
+                --output "$m.part" "$model_url" 2>/dev/null \
+           && curl --fail --location --silent --show-error --retry 2 --connect-timeout 15 \
+                --output "$p.part" "$mmproj_url" 2>/dev/null; then
+            mv -f "$m.part" "$m"
+            mv -f "$p.part" "$p"
+            printf '%s  OK  VLM pair downloaded from %s%s\n' "$GREEN" "$label" "$RESET"
+            VLM_OK=1
+            return 0
+        fi
+        rm -f "$m.part" "$p.part" 2>/dev/null || true
+        printf '%s  --  %s mirror failed, trying next%s\n' "$YELLOW" "$label" "$RESET" >&2
+        return 1
+    }
+
+    # Mirror 1: second-state (prolific GGUF publisher)
+    try_vlm_pair \
+      "https://huggingface.co/second-state/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+      "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+      "https://huggingface.co/second-state/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-vision-encoder.gguf" \
+      "Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf" \
+      "second-state" || true
+
+    # Mirror 2: ggml-org official VLM collection
+    if (( VLM_OK == 0 )); then
+        try_vlm_pair \
+          "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+          "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+          "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf" \
+          "Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf" \
+          "ggml-org" || true
+    fi
+
+    # Mirror 3: lmstudio-community (sometimes mirrors Qwen VL)
+    if (( VLM_OK == 0 )); then
+        try_vlm_pair \
+          "https://huggingface.co/lmstudio-community/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+          "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" \
+          "https://huggingface.co/lmstudio-community/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf" \
+          "Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf" \
+          "lmstudio-community" || true
+    fi
+
+    # Restore FAILURES counter (VLM is optional, retry failures are not real failures).
+    FAILURES=$FAILURES_BEFORE_VLM
+
+    if (( VLM_OK == 0 )); then
+        printf '\n%s  !!  All VLM mirrors failed (common when a repo is gated or renamed).%s\n' "$YELLOW" "$RESET" >&2
+        printf '%s      This is OPTIONAL. Everything else still works:%s\n' "$YELLOW" "$RESET"
+        printf '      - Vision detection: YES\n'
+        printf '      - Pose + 12 rule-based actions: YES\n'
+        printf '      - Scene parsing: YES\n'
+        printf '      - Agent Studio chat: YES\n'
+        printf '      - Multimodal action search by TEXT prompt: YES (via local reasoning worker)\n'
+        printf '      - Multimodal action search by REFERENCE IMAGE: NO (needs VLM)\n\n'
+        printf '      To get the VLM manually:\n'
+        printf '        1. Open a browser to huggingface.co and search "Qwen2.5-VL-3B-Instruct GGUF"\n'
+        printf '        2. Download a Q4_K_M .gguf file AND its vision mmproj .gguf file\n'
+        printf '        3. Place both in %s/\n' "$MODELS_DIR"
+        printf '        4. Rename them to:\n'
+        printf '           - Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf\n'
+        printf '           - Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf\n'
+        printf '        5. Restart Arikizu.\n'
+        # Return 0 on purpose: the VLM is optional, do not fail the whole install.
+    fi
 fi
 
 printf '\nmodels dir: %s\n' "$MODELS_DIR"

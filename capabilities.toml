@@ -315,6 +315,30 @@ output = "object"
 timeout_ms = 15000
 priority = 0
 
+[video_segment_at_point]
+name = "video.segment_at_point"
+worker = "video"
+input = { image_base64 = "string", x = "number", y = "number" }
+output = "object"
+timeout_ms = 30000
+priority = 0
+
+[video_save_segment]
+name = "video.save_segment"
+worker = "video"
+input = { name = "string", image_base64 = "string", mask_png_base64 = "string", bbox = "array", note = "string" }
+output = "object"
+timeout_ms = 10000
+priority = 0
+
+[video_list_segments]
+name = "video.list_segments"
+worker = "video"
+input = { limit = "integer" }
+output = "object"
+timeout_ms = 5000
+priority = 0
+
 [video_actions_known]
 name = "video.actions_known"
 worker = "video"

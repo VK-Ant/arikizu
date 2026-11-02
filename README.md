@@ -148,61 +148,125 @@ missing model file; `scripts/download-default-models.sh` fixes that.
 
 ---
 
-## One-command install (recommended)
+## From zero to running (one page, in order)
 
-Instead of running each step by hand, use the single installer:
+Do these in order. Don't skip. Each step takes 1-10 minutes.
+
+### Step 1: unzip and enter the directory
 
 ```bash
+cd ~
+unzip -o arikizu-v1.7.11.zip
 cd ~/arikizu
-scripts/install-everything.sh --with-vlm --llm-size 1.5b
 ```
 
-That installs system libraries, syncs the Python workers (MediaPipe is
-now a required dep, no separate `uv add` needed), downloads every
-model, and verifies MediaPipe actually imports. Each step is
-independent; the summary tells you if anything failed and how to retry.
+### Step 2: install EVERYTHING in one command
 
-Then:
+```bash
+scripts/install-everything.sh --llm-size 1.5b
+```
+
+That runs three sub-steps:
+
+1. **System libraries** via `apt install` (needs sudo once). Installs
+   libgl1, libgles2, libegl1, libglvnd0, libglib2.0-0, libsm6, libxext6,
+   libxrender1, libxcb1, libxkbcommon0, libgomp1, libportaudio2,
+   ffmpeg, libavcodec-extra. Everything MediaPipe / OpenCV / ONNX /
+   llama-cpp might ever ask for, installed upfront.
+2. **Python workers** via `uv sync`. Pins the workspace to Python 3.12
+   (because MediaPipe has no 3.13 or 3.14 wheels yet) and installs
+   MediaPipe as a required dep. If your system Python is 3.14, this is
+   fine: `uv` manages its own Python 3.12 side-by-side, no changes to
+   your system Python. After sync, the script runs `import mediapipe`
+   and verifies it works end-to-end.
+3. **All models**: YOLOv8 (vision), Silero VAD (audio), SmolLM2
+   (fallback LLM), MediaPipe tflite set (video perception), SegFormer
+   int8 (scene parse), Qwen2.5-1.5B-Instruct (agent brain). About 1.5 GB
+   total.
+
+Add `--with-vlm` if you want the optional Qwen2.5-VL 3B for
+reference-image action search (~2.7 GB more, often requires manual
+download because HF repos get gated). Skip it if your box has <8 GB
+free; everything else still works.
+
+The summary at the end says "install completed cleanly" or lists the
+exact step that failed with the exact command to retry.
+
+### Step 3: build the Rust supervisor
 
 ```bash
 make build
-pkill -9 -f arikizu && make run
 ```
 
-Open `http://127.0.0.1:7000/demo/`. Diagnostics panel should be all
-green.
+Takes 2-5 minutes first time, seconds on rebuilds.
+
+### Step 4: start Arikizu
+
+```bash
+pkill -9 -f arikizu   # just in case
+make run
+```
+
+Keep this terminal open. The supervisor runs here.
+
+### Step 5: open the browser
+
+Open `http://127.0.0.1:7000/demo/` in your browser.
+
+The Diagnostics panel at the bottom should show all five rows as
+**green READY**:
+
+- vision model (yolov8n.onnx)
+- audio VAD (silero_vad.onnx)
+- reasoning LLM (loaded)
+- video stack (actually runs inference on a test image)
+- agent runtime (reasoning + policy)
+
+If any row is red or orange, the error line below it tells you exactly
+what to install or restart. The most common issue is forgetting to
+hard-restart Arikizu after step 2 — the running supervisor keeps the
+old venv. Fix with `pkill -9 -f arikizu && make run`.
+
+### Step 6: import example agents (optional)
+
+```bash
+for a in safety-inspector elder-care-companion document-reviewer sensor-triage retail-floor; do
+  curl -sS -X POST http://127.0.0.1:7000/api/v1/call/agent/import \
+    -H 'content-type: application/json' \
+    -d "{\"payload\":{\"file_path\":\"examples/agents/${a}.json\"}}" \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d.get('name','?')}: {d.get('id','ERROR: '+str(d.get('error')))}\")"
+done
+```
+
+Open `http://127.0.0.1:7000/demo/agent_studio.html` and chat with any
+of them.
+
+### What to open where
+
+| URL | What it does |
+|---|---|
+| `http://127.0.0.1:7000/` | Operator dashboard |
+| `http://127.0.0.1:7000/demo/` | Hub with all 7 demo cards + Diagnostics panel |
+| `http://127.0.0.1:7000/demo/video_studio.html` | Webcam detection + pose + action labels |
+| `http://127.0.0.1:7000/demo/agent_studio.html` | Chat with custom agents |
+| `http://127.0.0.1:7000/demo/vision_live.html` | Vision live detection |
+| `http://127.0.0.1:7000/demo/audio_view.html` | Mic keyword spotting |
+| `http://127.0.0.1:7000/demo/docs_view.html` | PDF upload + ask |
+| `http://127.0.0.1:7000/demo/reasoning_chat.html` | Reasoning chat |
+| `http://127.0.0.1:7000/demo/timeseries_view.html` | Sensor data upload + anomaly detect |
 
 ---
 
-## Two things that catch everyone first time
+## Troubleshooting (if you hit something anyway)
 
-### "Video Studio shows unknown / 0 objects / 0 people"
-
-The video stack is MISSING. One of three things is wrong, in order of
-how often each is the culprit:
-
-1. **System libraries not installed** (most common on fresh WSL /
-   Ubuntu / cloud VMs). MediaPipe's Python package imports fine on its
-   own, but it needs `libgl1`, `libglib2.0-0`, `libsm6`, `libxext6`,
-   `libxrender1` to actually run inference. Fix:
-
-   ```bash
-   scripts/install-video-system-deps.sh
-   pkill -9 -f arikizu && make run
-   ```
-
-2. **MediaPipe Python package not installed** in the video_worker venv.
-3. **Model files not downloaded**.
-
-Run the honest self-test and it tells you exactly which stage broke:
+Run the honest self-test; the output tells you exactly what to fix:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:7000/api/v1/call/video/selftest \
   -H 'content-type: application/json' -d '{"payload":{}}' | python3 -m json.tool
 ```
 
-The `fix` field in the response is the exact command to run. If you
-want the full install from scratch:
+The `fix` field in the response is the exact command to run.
 
 ```bash
 cd ~/arikizu/workers

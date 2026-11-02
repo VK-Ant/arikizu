@@ -41,6 +41,25 @@ done
 BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'; GREY=$'\033[90m'; RESET=$'\033[0m'
 FAILED=()
 
+# Fail fast with a clear message if uv is missing. Without uv, nothing works.
+if ! command -v uv >/dev/null 2>&1; then
+    printf '%serror: uv is not installed.%s\n' "$RED" "$RESET" >&2
+    printf 'Install it first: curl -LsSf https://astral.sh/uv/install.sh | sh\n' >&2
+    printf 'Then re-run this script.\n' >&2
+    exit 1
+fi
+
+# Flag Python 3.14 ambient as a known issue BEFORE sync, so users understand
+# why we pin 3.12 in step 2. (uv's own managed Python is unaffected either way.)
+AMBIENT_PY="$(python3 --version 2>/dev/null | awk '{print $2}' || echo 'none')"
+if [[ "$AMBIENT_PY" == 3.14* ]] || [[ "$AMBIENT_PY" == 3.13* ]]; then
+    printf '%snote: ambient Python is %s. MediaPipe has no wheels for 3.13 or 3.14.%s\n' \
+        "$YELLOW" "$AMBIENT_PY" "$RESET"
+    printf '%s      Step 2 will install uv-managed Python 3.12 and pin the workspace to it. No system changes.%s\n' \
+        "$YELLOW" "$RESET"
+    echo
+fi
+
 step() { printf '\n%s=== %s ===%s\n' "$BOLD" "$1" "$RESET"; }
 ok()   { printf '%s  OK  %s%s\n' "$GREEN" "$1" "$RESET"; }
 fail() { printf '%s  !!  %s%s\n' "$RED" "$1" "$RESET"; FAILED+=("$2"); }
@@ -69,8 +88,21 @@ if ! command -v uv >/dev/null 2>&1; then
     fail "uv not installed" "install uv first: curl -LsSf https://astral.sh/uv/install.sh | sh"
 else
     pushd workers >/dev/null
+
+    # CRITICAL: pin Python 3.12. MediaPipe has no Python 3.14 wheels, so a
+    # fresh Ubuntu 25.10 / WSL that defaults to 3.14 will fail uv sync with
+    # "no compatible version". uv manages its own Pythons, so install 3.12
+    # on first use and pin this workspace to it. Idempotent on re-runs.
+    if [[ ! -f .python-version ]] || [[ "$(cat .python-version 2>/dev/null)" != "3.12" ]]; then
+        printf '  pinning workspace to Python 3.12 (MediaPipe does not yet have 3.14 wheels)...\n'
+        uv python install 3.12 2>&1 | sed 's/^/    /'
+        uv python pin 3.12 2>&1 | sed 's/^/    /'
+        # Wipe the venv so uv rebuilds it with 3.12
+        rm -rf .venv
+    fi
+
     if uv sync; then
-        ok "uv sync completed"
+        ok "uv sync completed (Python $(uv run --package video-worker python3 -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")' 2>/dev/null))"
         # Verify MediaPipe actually imports.
         if uv run --package video-worker python3 -c "import mediapipe; print('mediapipe', mediapipe.__version__)" 2>&1; then
             ok "MediaPipe import verified"
@@ -79,7 +111,7 @@ else
                  "likely a system-lib issue. Rerun step 1 or install libgl1 manually."
         fi
     else
-        fail "uv sync failed" "see error above; usually a Python version mismatch (video-worker needs 3.11, 3.12, or 3.13)"
+        fail "uv sync failed" "see error above; usually a Python version mismatch (video-worker needs 3.11 or 3.12)"
     fi
     popd >/dev/null
 fi

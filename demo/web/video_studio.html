@@ -6,13 +6,13 @@
   <link rel="icon" type="image/png" href="/demo/favicon.png">
   <title>Arikizu Video Studio</title>
   <style>
-    :root { --bg:#faf9f4; --fg:#1a1a1a; --muted:#6b6b6b; --accent:#c75c2a; --card:#fff;
-            --border:#e8e6df; --pass:#2d8a4e; --wait:#c89520; --fail:#b84040;
+    :root { --bg:#ffffff; --fg:#0a0a0a; --muted:#666666; --accent:#ff6b1a; --card:#ffffff;
+            --border:#e5e5e5; --pass:#2d8a4e; --wait:#c89520; --fail:#b84040;
             --mono: ui-monospace, Menlo, Consolas, monospace;
             --sans: -apple-system, system-ui, Roboto, sans-serif; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg:#1a1a14; --fg:#f0f0ec; --muted:#9b9b96; --accent:#e07a4a;
-              --card:#23231c; --border:#2f2f26; color-scheme: dark; }
+      :root { --bg:#0a0a0a; --fg:#ffffff; --muted:#999999; --accent:#ff8a3a;
+              --card:#141414; --border:#2a2a2a; color-scheme: dark; }
     }
     *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
     .app-header{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--card);display:flex;gap:12px;align-items:center}
@@ -106,6 +106,7 @@
     <div class="tabs" role="tablist">
       <button id="t-video" role="tab" aria-selected="true" data-panel="p-video">Video file</button>
       <button id="t-webcam" role="tab" aria-selected="false" data-panel="p-webcam">Webcam</button>
+      <button id="t-segment" role="tab" aria-selected="false" data-panel="p-segment">Segment</button>
       <button id="t-history" role="tab" aria-selected="false" data-panel="p-history">History</button>
     </div>
 
@@ -185,6 +186,8 @@
         <span style="margin-left:16px">VLM cadence</span>
         <select id="cam-vlm-cadence"><option value="0">off</option><option value="3">every 3 s</option><option value="5" selected>every 5 s</option></select>
         <label style="margin-left:16px"><input type="checkbox" id="cam-blur" checked> privacy blur</label>
+        <label style="margin-left:16px"><input type="checkbox" id="cam-pin-mode"> click-to-segment (pin mode)</label>
+        <span id="cam-pin-status" style="margin-left:12px;color:var(--muted)"></span>
       </div>
       <div class="stage">
         <div class="stage-grid">
@@ -204,6 +207,38 @@
             <div class="row"><span>detect</span><span id="cam-ms-detect">—</span></div>
             <div class="row"><span>pose</span><span id="cam-ms-pose">—</span></div>
             <div class="row"><span>face</span><span id="cam-ms-face">—</span></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SEGMENT PANEL ========== -->
+    <section id="p-segment" class="panel" aria-selected="false">
+      <div class="ctl">
+        <strong>Load image to segment:</strong>
+        <input id="seg-file" type="file" accept="image/*">
+        <button id="seg-webcam-snap" class="sec">Snap from webcam</button>
+        <span style="color:var(--muted);font-size:12px;margin-left:12px">Click anywhere on the image to segment that object.</span>
+      </div>
+      <div class="ctl" style="margin-top:12px">
+        <input id="seg-name" type="text" placeholder="segment name (e.g. refrigerator-dent)" style="min-width:260px;background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:6px 10px;border-radius:4px">
+        <button id="seg-save" disabled>Save segment</button>
+        <button id="seg-clear" class="sec">Clear</button>
+        <span id="seg-status" style="color:var(--muted);font-size:12px;margin-left:12px"></span>
+      </div>
+      <div class="stage">
+        <div class="stage-grid">
+          <div class="vwrap" style="cursor:crosshair">
+            <canvas id="seg-canvas" style="width:100%;height:auto;max-height:70vh;background:#000"></canvas>
+          </div>
+          <aside class="hud">
+            <h4>Last segment</h4>
+            <div class="row"><span>point</span><span id="seg-point">—</span></div>
+            <div class="row"><span>bbox</span><span id="seg-bbox">—</span></div>
+            <div class="row"><span>mask pixels</span><span id="seg-pixels">—</span></div>
+            <div class="row"><span>ms</span><span id="seg-ms">—</span></div>
+            <h4 style="margin-top:16px">Saved segments</h4>
+            <div id="seg-saved-list" style="font-size:11px;font-family:var(--mono);color:var(--muted);max-height:200px;overflow-y:auto"></div>
           </aside>
         </div>
       </div>
@@ -292,6 +327,9 @@ document.querySelectorAll(".tabs button").forEach(btn => {
 });
 
 // ---------- Overlay drawing ----------
+// Colors for distinguishing multiple people
+const PERSON_COLORS = ["#ff6b1a", "#3498db", "#9b59b6", "#2ecc71"];
+
 function drawFrame(canvas, result, opts) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -299,28 +337,40 @@ function drawFrame(canvas, result, opts) {
   const f = result.frame || {};
   const dets = f.detections || [];
   const landmarks = f.pose_landmarks || [];
+  const poses = f.poses || [];     // multi-person
   const faces = f.faces || [];
+  const perPersonActions = result.actions_per_person || [];
 
-  // Privacy blur
+  // Privacy blur: ALL detected faces, not just the first
   if (opts.blur && faces.length) {
-    // Simple approach: draw a solid rect; real blur would need a shader
     for (const face of faces) {
       const [x, y, w, h] = face;
-      ctx.fillStyle = "rgba(20,20,20,0.9)";
+      ctx.filter = "blur(14px)";
+      // Draw a dark overlay instead; filter blur applied over empty canvas does nothing
+      ctx.fillStyle = "rgba(20,20,20,0.92)";
       ctx.fillRect(x * W, y * H, w * W, h * H);
     }
+    ctx.filter = "none";
   }
 
   // Boxes
   if (opts.boxes) {
+    let personIdx = 0;
     for (const d of dets) {
       const [x1, y1, x2, y2] = d.bbox;
-      ctx.strokeStyle = d.label === "person" ? "#e07a4a" : "#3498db";
+      let color;
+      if (d.label === "person") {
+        color = PERSON_COLORS[personIdx % PERSON_COLORS.length];
+        personIdx++;
+      } else {
+        color = "#3498db";
+      }
+      ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.strokeRect(x1 * W, y1 * H, (x2 - x1) * W, (y2 - y1) * H);
       if (opts.labels) {
         ctx.font = "12px sans-serif";
-        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fillStyle = color;
         const txt = `${d.label} ${(d.score * 100 | 0)}%`;
         const tw = ctx.measureText(txt).width;
         ctx.fillRect(x1 * W, y1 * H - 16, tw + 10, 16);
@@ -330,27 +380,46 @@ function drawFrame(canvas, result, opts) {
     }
   }
 
-  // Pose skeleton
-  if (opts.pose && landmarks.length) {
+  // Pose skeleton: draw ALL poses with per-person color
+  if (opts.pose) {
     const edges = [
-      [11,12],[11,13],[13,15],[12,14],[14,16],         // arms + shoulders
-      [11,23],[12,24],[23,24],                           // torso
-      [23,25],[25,27],[24,26],[26,28],                   // legs
+      [11,12],[11,13],[13,15],[12,14],[14,16],
+      [11,23],[12,24],[23,24],
+      [23,25],[25,27],[24,26],[26,28],
     ];
-    ctx.strokeStyle = "#2d8a4e";
-    ctx.lineWidth = 2.5;
-    for (const [a, b] of edges) {
-      if (!landmarks[a] || !landmarks[b]) continue;
-      ctx.beginPath();
-      ctx.moveTo(landmarks[a][0] * W, landmarks[a][1] * H);
-      ctx.lineTo(landmarks[b][0] * W, landmarks[b][1] * H);
-      ctx.stroke();
-    }
-    ctx.fillStyle = "#2d8a4e";
-    for (const p of landmarks) {
-      ctx.beginPath();
-      ctx.arc(p[0] * W, p[1] * H, 3, 0, Math.PI * 2);
-      ctx.fill();
+    const posesToDraw = poses.length > 0 ? poses :
+                       (landmarks.length ? [{person_id: 0, landmarks: landmarks}] : []);
+    for (const pose of posesToDraw) {
+      const color = PERSON_COLORS[(pose.person_id || 0) % PERSON_COLORS.length];
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 2.5;
+      const lms = pose.landmarks;
+      for (const [a, b] of edges) {
+        if (!lms[a] || !lms[b]) continue;
+        ctx.beginPath();
+        ctx.moveTo(lms[a][0] * W, lms[a][1] * H);
+        ctx.lineTo(lms[b][0] * W, lms[b][1] * H);
+        ctx.stroke();
+      }
+      for (const p of lms) {
+        ctx.beginPath();
+        ctx.arc(p[0] * W, p[1] * H, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Per-person action label near the head (landmark 0 = nose)
+      const act = perPersonActions.find(a => a.person_id === pose.person_id);
+      if (act && act.action !== "unknown" && lms[0]) {
+        const nx = lms[0][0] * W;
+        const ny = lms[0][1] * H;
+        ctx.font = "bold 13px sans-serif";
+        const txt = `${act.action} ${(act.confidence * 100 | 0)}%`;
+        const tw = ctx.measureText(txt).width;
+        ctx.fillStyle = color;
+        ctx.fillRect(nx - tw/2 - 6, ny - 32, tw + 12, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(txt, nx - tw/2, ny - 18);
+      }
     }
   }
 }
@@ -516,6 +585,69 @@ document.getElementById("run-video").onclick = async () => {
 // ---------- Webcam ----------
 let camStream = null, camTimer = null, camFrameCount = 0, camLastT = 0, camLastVLM = 0;
 
+// Live click-to-segment on the webcam: user clicks the overlay to place
+// a pin, we re-segment at that pin every ~2 seconds and keep the mask on
+// screen. Pin stays until user clicks again or disables pin mode.
+let camPin = null;              // {x, y} in normalized 0..1
+let camLastMask = null;          // {mask_b64, bbox} from the last segmentation
+let camLastSegT = 0;             // last segmentation timestamp
+const SEG_CADENCE_MS = 2000;     // re-segment every 2 s
+
+const camOverlay = document.getElementById("cam-overlay");
+camOverlay.addEventListener("click", (e) => {
+  if (!document.getElementById("cam-pin-mode").checked) return;
+  const rect = camOverlay.getBoundingClientRect();
+  const nx = (e.clientX - rect.left) / rect.width;
+  const ny = (e.clientY - rect.top) / rect.height;
+  camPin = {x: nx, y: ny};
+  camLastMask = null;
+  camLastSegT = 0;      // force a segmentation on the next tick
+  document.getElementById("cam-pin-status").textContent =
+    `pin at ${(nx*100).toFixed(0)}%, ${(ny*100).toFixed(0)}% — re-segmenting`;
+});
+
+document.getElementById("cam-pin-mode").addEventListener("change", (e) => {
+  if (!e.target.checked) {
+    camPin = null;
+    camLastMask = null;
+    document.getElementById("cam-pin-status").textContent = "";
+    camOverlay.classList.remove("click");
+  } else {
+    camOverlay.classList.add("click");
+    document.getElementById("cam-pin-status").textContent =
+      "click an object on the live feed";
+  }
+});
+
+function drawLiveMask(ctx, maskB64, bbox) {
+  if (!maskB64) return;
+  // Draw mask tinted orange with ~40% alpha. We cache the mask Image so
+  // we don't decode base64 every frame.
+  if (!drawLiveMask._img || drawLiveMask._b64 !== maskB64) {
+    const img = new Image();
+    img.onload = () => { drawLiveMask._img = img; drawLiveMask._b64 = maskB64; };
+    img.src = "data:image/png;base64," + maskB64;
+    return;
+  }
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d");
+  octx.drawImage(drawLiveMask._img, 0, 0, W, H);
+  octx.globalCompositeOperation = "source-in";
+  octx.fillStyle = "#ff6b1a";
+  octx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 0.45;
+  ctx.drawImage(off, 0, 0);
+  ctx.globalAlpha = 1.0;
+  if (bbox) {
+    ctx.strokeStyle = "#ff6b1a";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bbox[0] * W, bbox[1] * H,
+                   (bbox[2] - bbox[0]) * W, (bbox[3] - bbox[1]) * H);
+  }
+}
+
 async function startCam() {
   const camVid = document.getElementById("cam-vid");
   const camOverlay = document.getElementById("cam-overlay");
@@ -566,6 +698,36 @@ async function startCam() {
           blur: document.getElementById("cam-blur").checked,
           labels: true,
         });
+        // Live segmentation: if a pin is placed, re-segment every ~2s and
+        // overlay the mask on each frame. Between segmentations the last
+        // mask is reused, so the user always sees SOMETHING.
+        if (camPin) {
+          const ctx = camOverlay.getContext("2d");
+          if (camLastMask) {
+            drawLiveMask(ctx, camLastMask.mask, camLastMask.bbox);
+          }
+          const now = performance.now();
+          if (now - camLastSegT >= SEG_CADENCE_MS) {
+            camLastSegT = now;
+            callCap("video.segment_at_point", {
+              image_base64: b64, x: camPin.x, y: camPin.y,
+            }).then(sr => {
+              if (!sr.error && sr.mask_png_base64) {
+                camLastMask = {mask: sr.mask_png_base64, bbox: sr.bbox};
+                document.getElementById("cam-pin-status").textContent =
+                  `pinned object: ${sr.mask_pixel_count} px, ${sr.ms} ms`;
+              }
+            }).catch(() => {});
+          }
+          // Draw the pin dot on top so the user knows where they clicked
+          ctx.fillStyle = "#ff6b1a";
+          ctx.beginPath();
+          ctx.arc(camPin.x * camOverlay.width, camPin.y * camOverlay.height, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
         const act = r.action || {};
         document.getElementById("cam-action").textContent = act.action || "—";
         document.getElementById("cam-conf").textContent = (act.confidence || 0).toFixed(2);
@@ -638,6 +800,165 @@ async function loadHistory() {
   }
 }
 document.getElementById("refresh-history").onclick = loadHistory;
+
+// ---------- Segment tab: click-to-segment with save ----------
+const segCanvas = document.getElementById("seg-canvas");
+let segSourceImage = null;      // HTMLImageElement
+let segLastResult = null;        // last mask response
+let segSourceB64 = null;         // base64 of the loaded image
+
+function drawSegBase() {
+  const ctx = segCanvas.getContext("2d");
+  if (!segSourceImage) return;
+  segCanvas.width = segSourceImage.naturalWidth;
+  segCanvas.height = segSourceImage.naturalHeight;
+  ctx.drawImage(segSourceImage, 0, 0);
+}
+
+function overlayMask(maskB64, bbox) {
+  if (!segSourceImage) return;
+  const ctx = segCanvas.getContext("2d");
+  drawSegBase();   // re-draw original
+  const img = new Image();
+  img.onload = () => {
+    const W = segCanvas.width, H = segCanvas.height;
+    ctx.globalAlpha = 0.5;
+    ctx.globalCompositeOperation = "source-over";
+    // Tint the mask orange by drawing a filled rect clipped by the mask
+    const off = document.createElement("canvas");
+    off.width = W; off.height = H;
+    const octx = off.getContext("2d");
+    octx.drawImage(img, 0, 0, W, H);
+    octx.globalCompositeOperation = "source-in";
+    octx.fillStyle = "#ff6b1a";
+    octx.fillRect(0, 0, W, H);
+    ctx.drawImage(off, 0, 0);
+    ctx.globalAlpha = 1.0;
+    // Draw bbox
+    if (bbox) {
+      ctx.strokeStyle = "#ff6b1a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bbox[0] * W, bbox[1] * H, (bbox[2] - bbox[0]) * W, (bbox[3] - bbox[1]) * H);
+    }
+  };
+  img.src = "data:image/png;base64," + maskB64;
+}
+
+document.getElementById("seg-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    segSourceB64 = reader.result.split(",")[1];
+    const img = new Image();
+    img.onload = () => {
+      segSourceImage = img;
+      drawSegBase();
+      document.getElementById("seg-status").textContent =
+        `${img.naturalWidth}x${img.naturalHeight} loaded. Click an object to segment.`;
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById("seg-webcam-snap").onclick = async () => {
+  const camVid = document.getElementById("cam-vid");
+  if (!camVid.videoWidth) {
+    alert("Start the webcam on the Webcam tab first, then come back here.");
+    return;
+  }
+  const tmp = document.createElement("canvas");
+  tmp.width = camVid.videoWidth; tmp.height = camVid.videoHeight;
+  tmp.getContext("2d").drawImage(camVid, 0, 0);
+  segSourceB64 = tmp.toDataURL("image/jpeg", 0.9).split(",")[1];
+  const img = new Image();
+  img.onload = () => {
+    segSourceImage = img;
+    drawSegBase();
+    document.getElementById("seg-status").textContent =
+      "snapshot captured. Click an object to segment.";
+  };
+  img.src = "data:image/jpeg;base64," + segSourceB64;
+};
+
+segCanvas.addEventListener("click", async (e) => {
+  if (!segSourceImage || !segSourceB64) return;
+  const rect = segCanvas.getBoundingClientRect();
+  // Account for canvas CSS scaling
+  const nx = (e.clientX - rect.left) / rect.width;
+  const ny = (e.clientY - rect.top) / rect.height;
+  document.getElementById("seg-status").textContent = "segmenting...";
+  document.getElementById("seg-point").textContent = `${(nx*100).toFixed(1)}%, ${(ny*100).toFixed(1)}%`;
+  try {
+    const r = await callCap("video.segment_at_point", {
+      image_base64: segSourceB64, x: nx, y: ny,
+    });
+    if (r.error) {
+      document.getElementById("seg-status").textContent = "error: " + r.error;
+      return;
+    }
+    segLastResult = r;
+    overlayMask(r.mask_png_base64, r.bbox);
+    document.getElementById("seg-bbox").textContent = r.bbox
+      ? r.bbox.map(v => (v*100).toFixed(1) + "%").join(", ") : "—";
+    document.getElementById("seg-pixels").textContent = r.mask_pixel_count || 0;
+    document.getElementById("seg-ms").textContent = r.ms;
+    document.getElementById("seg-save").disabled = false;
+    document.getElementById("seg-status").textContent =
+      `segmented in ${r.ms} ms. Give it a name and click Save segment.`;
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "error: " + e.message;
+  }
+});
+
+document.getElementById("seg-save").onclick = async () => {
+  if (!segLastResult || !segSourceB64) return;
+  const name = document.getElementById("seg-name").value.trim() || "segment";
+  try {
+    const r = await callCap("video.save_segment", {
+      name,
+      image_base64: segSourceB64,
+      mask_png_base64: segLastResult.mask_png_base64,
+      bbox: segLastResult.bbox,
+      note: `segmented at (${segLastResult.point_x.toFixed(3)}, ${segLastResult.point_y.toFixed(3)})`,
+    });
+    if (r.error) {
+      document.getElementById("seg-status").textContent = "save failed: " + r.error;
+      return;
+    }
+    document.getElementById("seg-status").textContent = `saved to ${r.saved_dir}`;
+    document.getElementById("seg-save").disabled = true;
+    document.getElementById("seg-name").value = "";
+    await loadSavedSegments();
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "save error: " + e.message;
+  }
+};
+
+document.getElementById("seg-clear").onclick = () => {
+  drawSegBase();
+  segLastResult = null;
+  document.getElementById("seg-save").disabled = true;
+  document.getElementById("seg-status").textContent = "cleared";
+};
+
+async function loadSavedSegments() {
+  try {
+    const r = await callCap("video.list_segments", {limit: 50});
+    const el = document.getElementById("seg-saved-list");
+    const rows = r.segments || [];
+    if (!rows.length) { el.textContent = "none yet"; return; }
+    el.innerHTML = rows.map(s => `
+      <div style="padding:4px 0;border-bottom:1px solid var(--border)">
+        <strong>${s.name || "(unnamed)"}</strong><br>
+        <span style="color:var(--muted);font-size:10px">${s.dir}</span>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+// Load saved segments when the Segment tab is first opened
+document.getElementById("t-segment").addEventListener("click", loadSavedSegments);
 
 // ---------- Boot ----------
 loadDevice();

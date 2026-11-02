@@ -39,12 +39,20 @@ class Detection:
 
 @dataclass
 class FrameResult:
-    """One frame's perception output."""
+    """One frame's perception output.
+
+    Multi-person: `poses` is a list, one entry per person detected. The
+    legacy single-person fields `pose_landmarks` / `pose_visibility` are
+    kept for backward compat and always point at the first person.
+    """
     detections: list[Detection] = field(default_factory=list)
-    pose_landmarks: list[tuple[float, float, float]] = field(default_factory=list)   # 33 (x, y, z) per person-0
+    # Legacy single-person fields (pose 0)
+    pose_landmarks: list[tuple[float, float, float]] = field(default_factory=list)
     pose_visibility: list[float] = field(default_factory=list)
-    person_mask_shape: tuple[int, int] | None = None    # (h, w) if a mask was produced
-    faces: list[tuple[float, float, float, float]] = field(default_factory=list)     # normalized x, y, w, h
+    # Multi-person poses: one entry per person
+    poses: list[dict[str, Any]] = field(default_factory=list)
+    person_mask_shape: tuple[int, int] | None = None
+    faces: list[tuple[float, float, float, float]] = field(default_factory=list)
     ms: dict[str, float] = field(default_factory=dict)
     width: int = 0
     height: int = 0
@@ -58,6 +66,7 @@ class FrameResult:
             ],
             "pose_landmarks": [[round(x, 4), round(y, 4), round(z, 4)] for x, y, z in self.pose_landmarks],
             "pose_visibility": [round(v, 3) for v in self.pose_visibility],
+            "poses": self.poses,
             "faces": [[round(v, 4) for v in f] for f in self.faces],
             "ms": self.ms,
             "width": self.width, "height": self.height,
@@ -142,9 +151,17 @@ class MediaPipePerception:
         pose_result = self.pose.detect_for_video(mp_img, ts)
         ms["pose"] = round((time.perf_counter() - t) * 1000, 1)
         if pose_result.pose_landmarks:
-            lms = pose_result.pose_landmarks[0]
-            out.pose_landmarks = [(lm.x, lm.y, lm.z) for lm in lms]
-            out.pose_visibility = [getattr(lm, "visibility", 1.0) for lm in lms]
+            # Collect EVERY person's landmarks (num_poses was set to 3 at init).
+            for i, lms in enumerate(pose_result.pose_landmarks):
+                out.poses.append({
+                    "person_id": i,
+                    "landmarks": [[round(lm.x, 4), round(lm.y, 4), round(lm.z, 4)] for lm in lms],
+                    "visibility": [round(getattr(lm, "visibility", 1.0), 3) for lm in lms],
+                })
+            # Legacy single-person fields: first pose.
+            first = pose_result.pose_landmarks[0]
+            out.pose_landmarks = [(lm.x, lm.y, lm.z) for lm in first]
+            out.pose_visibility = [getattr(lm, "visibility", 1.0) for lm in first]
         if pose_result.segmentation_masks:
             mask = pose_result.segmentation_masks[0]
             arr = mask.numpy_view()

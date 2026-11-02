@@ -40,9 +40,12 @@ def _b64_to_rgb_np(image_base64: str):
 def _fix_hint_for(backend_tag: str, err: str) -> str:
     """Return a specific fix command for a given error class."""
     err_low = err.lower()
-    # Catch the libGL error specifically; it looks like "no-mediapipe" at
-    # import time but is really a missing system library.
-    if "libgl" in err_low or "libgl.so" in err_low or "shared object" in err_low:
+    # Catch system-library errors specifically; they look like
+    # "no-mediapipe" at import time but are really a missing .so.
+    syslib_markers = ("libgl", "libgl.so", "libgles", "libegl", "libglib",
+                      "libsm", "libxext", "libxrender", "libgomp",
+                      "shared object", "cannot open shared")
+    if any(m in err_low for m in syslib_markers):
         return ("MediaPipe needs system libraries not installed on your box. "
                 "Run: scripts/install-video-system-deps.sh "
                 "then: pkill -9 -f arikizu && make run")
@@ -122,7 +125,10 @@ def main() -> None:
             results["mediapipe_import"]["detail"] = err
             results["overall"] = "FAIL"
             err_low = err.lower()
-            if "libgl" in err_low or "libgl.so" in err_low or "shared object" in err_low:
+            syslib_markers = ("libgl", "libgl.so", "libgles", "libegl", "libglib",
+                              "libsm", "libxext", "libxrender", "libgomp",
+                              "shared object", "cannot open shared")
+            if any(m in err_low for m in syslib_markers):
                 results["fix"] = (
                     "The Python package IS installed but a system library it needs is missing. "
                     "Run: scripts/install-video-system-deps.sh "
@@ -277,14 +283,26 @@ def main() -> None:
                 "backend": "inference-failed",
                 "fix_hint": "Check video_worker logs. Common cause: GPU delegate requested on a system without GPU support; set MP_DELEGATE=cpu and restart.",
             }
-        # Pose -> action
+        # Score an action for EACH person detected, not just person 0.
+        per_person_actions: list[dict[str, Any]] = []
+        for pose_entry in result.poses:
+            lms_tuples = [(x, y, z) for x, y, z in pose_entry["landmarks"]]
+            pf = actions.PoseFrame(lms_tuples, pose_entry["visibility"])
+            per_person_actions.append({
+                "person_id": pose_entry["person_id"],
+                **actions.recognize(pf, motion_px_per_s=float(motion_px_per_s or 0)),
+            })
+        # Legacy single-person action (first person).
         action = {"action": "unknown", "confidence": 0.0, "evidence": {}, "scores": {}}
         if result.pose_landmarks:
             pose = actions.PoseFrame(result.pose_landmarks, result.pose_visibility)
             action = actions.recognize(pose, motion_px_per_s=float(motion_px_per_s or 0))
         return {
             "frame": result.to_jsonable(),
-            "action": action,
+            "action": action,                       # legacy: first person's action
+            "actions_per_person": per_person_actions,  # NEW: one entry per person
+            "n_people": len(per_person_actions),
+            "n_faces": len(result.faces),
             "backend": "mediapipe",
         }
 
@@ -341,6 +359,136 @@ def main() -> None:
     # -----------------------------------------------------------------------
     # History
     # -----------------------------------------------------------------------
+
+    @worker.handler("video.segment_at_point")
+    def segment_at_point(image_base64: str = "", x: float = 0.5, y: float = 0.5) -> dict[str, Any]:
+        """Click-to-segment: given a frame and a normalized (x, y) point in
+        [0,1], return a binary mask + bounding box for whatever is under
+        that point. Uses MediaPipe magic_touch.
+
+        Returns {mask_png_base64, bbox, point_x, point_y, backend, ms}.
+        The mask is a PNG so the browser can draw it as an overlay or
+        save it alongside the original frame.
+        """
+        import base64 as _b64
+        import io as _io
+        import time
+        if not image_base64:
+            return {"error": "image_base64 required"}
+        try:
+            rgb, _raw = _b64_to_rgb_np(image_base64)
+        except Exception as e:
+            return {"error": f"decode failed: {e}"}
+        if not perception_mod.MP_OK:
+            return {"error": "MediaPipe not installed", "backend": "no-mediapipe"}
+
+        try:
+            import numpy as np
+            from PIL import Image
+            import mediapipe as mp
+            from mediapipe.tasks.python import BaseOptions, vision as mp_vision
+            from mediapipe.tasks.python.components.containers import keypoint as kp_mod
+
+            model_path = models.ensure("magic_touch")
+            segmenter_opts = mp_vision.InteractiveSegmenterOptions(
+                base_options=BaseOptions(model_asset_path=str(model_path),
+                                         delegate=BaseOptions.Delegate.CPU),
+                output_category_mask=True,
+            )
+        except Exception as e:
+            return {"error": f"segmenter not available: {e}", "backend": "init-failed"}
+
+        try:
+            t = time.perf_counter()
+            with mp_vision.InteractiveSegmenter.create_from_options(segmenter_opts) as segmenter:
+                mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                roi = mp_vision.InteractiveSegmenterRegionOfInterest(
+                    format=mp_vision.InteractiveSegmenterRegionOfInterest.Format.KEYPOINT,
+                    keypoint=kp_mod.NormalizedKeypoint(x=float(x), y=float(y)),
+                )
+                seg_result = segmenter.segment(mp_img, roi)
+            ms = round((time.perf_counter() - t) * 1000, 1)
+            cat_mask = seg_result.category_mask.numpy_view()
+            # The INSIDE class is category 0 (clicked object) per magic_touch.
+            inside = (cat_mask == 0).astype(np.uint8) * 255
+            # Compute bbox of the mask
+            ys, xs = np.where(inside > 0)
+            if len(xs) == 0:
+                bbox = None
+            else:
+                h, w = inside.shape
+                bbox = [float(xs.min() / w), float(ys.min() / h),
+                        float(xs.max() / w), float(ys.max() / h)]
+            # Encode mask as PNG
+            buf = _io.BytesIO()
+            Image.fromarray(inside, mode="L").save(buf, format="PNG")
+            mask_b64 = _b64.b64encode(buf.getvalue()).decode("ascii")
+            return {
+                "mask_png_base64": mask_b64,
+                "bbox": bbox,
+                "point_x": float(x), "point_y": float(y),
+                "mask_pixel_count": int((inside > 0).sum()),
+                "backend": "magic_touch",
+                "ms": ms,
+            }
+        except Exception as e:
+            return {"error": f"segmentation failed: {e}", "backend": "inference-failed"}
+
+    @worker.handler("video.save_segment")
+    def save_segment(name: str = "", image_base64: str = "", mask_png_base64: str = "",
+                     bbox: list | None = None, note: str = "") -> dict[str, Any]:
+        """Store a segment (frame + mask + bbox) to disk so the user can
+        download or re-use it later. Returns the saved path."""
+        import base64 as _b64
+        import time
+        from pathlib import Path
+        if not image_base64 or not mask_png_base64:
+            return {"error": "image_base64 and mask_png_base64 required"}
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in (name or "segment"))[:40]
+        ts = int(time.time())
+        root = models._find_project_root()
+        out_dir = root / "data" / "segments" / f"{ts}-{safe_name}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            (out_dir / "frame.jpg").write_bytes(_b64.b64decode(image_base64))
+            (out_dir / "mask.png").write_bytes(_b64.b64decode(mask_png_base64))
+            meta = {
+                "name": name, "note": note, "bbox": bbox,
+                "saved_at": ts, "frame": "frame.jpg", "mask": "mask.png",
+            }
+            import json
+            (out_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        except Exception as e:
+            return {"error": f"save failed: {e}"}
+        return {
+            "saved_dir": str(out_dir),
+            "files": ["frame.jpg", "mask.png", "meta.json"],
+            "name": name,
+        }
+
+    @worker.handler("video.list_segments")
+    def list_segments(limit: int = 50) -> dict[str, Any]:
+        """List saved segments (newest first)."""
+        from pathlib import Path
+        root = models._find_project_root()
+        seg_dir = root / "data" / "segments"
+        if not seg_dir.exists():
+            return {"segments": []}
+        entries = sorted(seg_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:int(limit)]
+        import json
+        out = []
+        for d in entries:
+            if not d.is_dir():
+                continue
+            meta_path = d / "meta.json"
+            if meta_path.exists():
+                try:
+                    out.append({"dir": d.name, **json.loads(meta_path.read_text())})
+                except Exception:
+                    out.append({"dir": d.name})
+            else:
+                out.append({"dir": d.name})
+        return {"segments": out}
 
     @worker.handler("video.history")
     def history_list(limit: int = 20) -> dict[str, Any]:
