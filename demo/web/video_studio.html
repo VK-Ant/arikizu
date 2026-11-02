@@ -228,7 +228,8 @@
         <strong>Load image to segment:</strong>
         <input id="seg-file" type="file" accept="image/*">
         <button id="seg-webcam-snap" class="sec">Snap from webcam</button>
-        <span style="color:var(--muted);font-size:12px;margin-left:12px">Click anywhere on the image to segment that object.</span>
+        <button id="seg-scene-parse" class="sec">Scene Parse (indoor + outdoor, 150 classes)</button>
+        <span style="color:var(--muted);font-size:12px;margin-left:12px">Click any object OR hit Scene Parse to segment everything at once (SegFormer-B0 512x512).</span>
       </div>
       <div class="ctl" id="seg-live-controls" hidden>
         <button id="seg-live-start">Start webcam</button>
@@ -254,8 +255,12 @@
             <div class="row"><span>mask pixels</span><span id="seg-pixels">—</span></div>
             <div class="row"><span>fill %</span><span id="seg-fill">—</span></div>
             <div class="row"><span>ms</span><span id="seg-ms">—</span></div>
+            <h4 style="margin-top:16px">Scene classes</h4>
+            <div id="seg-classes" style="font-size:12px;max-height:280px;overflow-y:auto">
+              <div style="color:var(--muted);font-size:11px">Hit "Scene Parse" above to list every indoor+outdoor class in the frame.</div>
+            </div>
             <h4 style="margin-top:16px">Saved segments</h4>
-            <div id="seg-saved-list" style="font-size:11px;font-family:var(--mono);color:var(--muted);max-height:200px;overflow-y:auto"></div>
+            <div id="seg-saved-list" style="font-size:11px;font-family:var(--mono);color:var(--muted);max-height:160px;overflow-y:auto"></div>
           </aside>
         </div>
       </div>
@@ -943,6 +948,260 @@ document.getElementById("seg-webcam-snap").onclick = async () => {
   img.src = "data:image/jpeg;base64," + segSourceB64;
 };
 
+// Scene parse: run SegFormer on the loaded image and overlay every
+// detected class with its label. Useful for indoor/outdoor whole-scene
+// understanding instead of per-click interactive segmentation.
+const PARSE_PALETTE = [
+  "#ff6b1a", "#5aa0ff", "#5fd37a", "#c870ff", "#ffd166", "#ff5a5a",
+  "#5ad7d7", "#ffb15a", "#a0a0ff", "#ff85c0",
+];
+// Scene parse state: the last response plus the currently isolated class.
+let segSceneResult = null;
+let segIsolatedIdx = null;
+
+document.getElementById("seg-scene-parse").onclick = async () => {
+  if (!segSourceB64) {
+    document.getElementById("seg-status").textContent = "load an image first (file or Snap from webcam)";
+    return;
+  }
+  document.getElementById("seg-status").textContent = "scene parsing (SegFormer-B0 512x512)...";
+  try {
+    const r = await callCap("video.scene_parse", { image_base64: segSourceB64, top_k: 12 });
+    if (r.error) {
+      document.getElementById("seg-status").innerHTML =
+        `<span style="color:var(--fail)">scene_parse: ${r.error}</span><br>` +
+        `<span style="font-size:11px;color:var(--muted)">${r.fix_hint || ""}</span>`;
+      return;
+    }
+    segSceneResult = r;
+    segIsolatedIdx = null;
+    drawSceneParse(r, null);
+    renderClassesPanel(r);
+    document.getElementById("seg-status").textContent =
+      `scene parse: ${r.ms} ms on ${r.provider || "cpu"} · ${r.classes.length} classes · click a row to isolate, Download to save`;
+    document.getElementById("seg-point").textContent = "scene parse";
+    document.getElementById("seg-bbox").textContent = "—";
+    document.getElementById("seg-pixels").textContent = "—";
+    document.getElementById("seg-fill").textContent = "—";
+    document.getElementById("seg-ms").textContent = r.ms;
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "error: " + e.message;
+  }
+};
+
+function renderClassesPanel(result) {
+  const panel = document.getElementById("seg-classes");
+  const classes = result.classes || [];
+  if (!classes.length) {
+    panel.innerHTML = `<div style="color:var(--muted);font-size:11px">no classes found</div>`;
+    return;
+  }
+  const rows = classes.map((c, idx) => {
+    const color = PARSE_PALETTE[idx % PARSE_PALETTE.length];
+    const pct = (c.fill_fraction * 100).toFixed(1);
+    return `
+      <div class="scene-row" data-idx="${idx}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer">
+        <span style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0;display:inline-block"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:12px">${c.class_name}</div>
+          <div style="font-size:10px;color:var(--muted);font-family:var(--mono)">${pct}% · ${c.pixel_count.toLocaleString()} px</div>
+        </div>
+        <button class="sec" data-dl="${idx}" style="padding:4px 10px;font-size:11px;border-radius:4px">Download</button>
+      </div>`;
+  }).join("");
+  panel.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click a row to isolate on canvas. Download saves the cropped PNG with alpha mask.</div>
+    ${rows}
+    <button id="seg-reset-isolate" class="sec" style="margin-top:8px;width:100%;font-size:11px">Show all classes</button>`;
+  panel.querySelectorAll(".scene-row").forEach(row => {
+    row.onclick = (ev) => {
+      if (ev.target.hasAttribute("data-dl")) return;   // let download button own its click
+      const idx = parseInt(row.getAttribute("data-idx"));
+      segIsolatedIdx = idx;
+      drawSceneParse(segSceneResult, idx);
+      highlightRow(idx);
+      const c = segSceneResult.classes[idx];
+      document.getElementById("seg-point").textContent = c.class_name;
+      document.getElementById("seg-bbox").textContent = c.bbox
+        ? c.bbox.map(v => (v*100).toFixed(1) + "%").join(", ") : "—";
+      document.getElementById("seg-pixels").textContent = c.pixel_count.toLocaleString();
+      document.getElementById("seg-fill").textContent = (c.fill_fraction * 100).toFixed(1) + "%";
+    };
+  });
+  panel.querySelectorAll("[data-dl]").forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const idx = parseInt(btn.getAttribute("data-dl"));
+      downloadClass(idx);
+    };
+  });
+  document.getElementById("seg-reset-isolate").onclick = () => {
+    segIsolatedIdx = null;
+    drawSceneParse(segSceneResult, null);
+    highlightRow(null);
+  };
+}
+
+/**
+ * Hit-test a normalized (nx, ny) point against the scene parse result.
+ * Returns the index of the smallest class whose bbox contains the point
+ * (smallest first so a person inside a wall-dominated frame wins).
+ * Returns null if no class contains the point.
+ */
+function findSceneClassAtPoint(nx, ny) {
+  if (!segSceneResult) return null;
+  const classes = segSceneResult.classes || [];
+  const candidates = [];
+  for (let i = 0; i < classes.length; i++) {
+    const b = classes[i].bbox;
+    if (!b) continue;
+    if (nx >= b[0] && nx <= b[2] && ny >= b[1] && ny <= b[3]) {
+      candidates.push({idx: i, fill: classes[i].fill_fraction});
+    }
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.fill - b.fill);   // smallest class first
+  return candidates[0].idx;
+}
+
+function highlightRow(idx) {
+  document.querySelectorAll(".scene-row").forEach(r => {
+    r.style.background = (parseInt(r.getAttribute("data-idx")) === idx) ? "rgba(255,107,26,0.12)" : "transparent";
+  });
+}
+
+/**
+ * Compose a canvas that contains ONLY the pixels of class `idx`,
+ * with the rest transparent. Trigger a browser download.
+ */
+async function downloadClass(idx) {
+  if (!segSceneResult || !segSourceImage) return;
+  const c = segSceneResult.classes[idx];
+  if (!c || !c.mask_png_base64) return;
+
+  // Load mask as image, then composite source via source-in with mask.
+  const maskImg = new Image();
+  maskImg.src = "data:image/png;base64," + c.mask_png_base64;
+  await maskImg.decode();
+
+  const W = segSourceImage.naturalWidth;
+  const H = segSourceImage.naturalHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  // Draw mask (grayscale: 0 or 255)
+  ctx.drawImage(maskImg, 0, 0, W, H);
+  // Keep only pixels where mask is non-transparent, replace with source RGB
+  ctx.globalCompositeOperation = "source-in";
+  ctx.drawImage(segSourceImage, 0, 0, W, H);
+
+  // Export + trigger download.
+  const dataUrl = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  const safeName = c.class_name.replace(/[^a-z0-9_-]/gi, "_");
+  a.download = `arikizu_${safeName}_${c.pixel_count}px.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // Also stash in the Saved Segments list via the backend so it lands
+  // next to click-to-segment outputs.
+  try {
+    await callCap("video.save_segment", {
+      name: `scene_${safeName}`,
+      image_base64: segSourceB64,
+      mask_png_base64: c.mask_png_base64,
+      bbox: c.bbox,
+      note: `scene_parse class ${c.class_name} (${(c.fill_fraction*100).toFixed(1)}%)`,
+    });
+    await loadSavedSegments();
+  } catch (e) {}
+}
+
+/**
+ * Render the scene parse result on the segment canvas.
+ * If `isolateIdx` is set, only that one class is highlighted
+ * (others fade out). If null, every class is shown tinted.
+ */
+function drawSceneParse(result, isolateIdx) {
+  if (!segSourceImage) return;
+  const ctx = segCanvas.getContext("2d");
+  drawSegBase();
+  const W = segCanvas.width, H = segCanvas.height;
+  const classes = result.classes || [];
+  if (isolateIdx !== null && isolateIdx !== undefined) {
+    // Fade the whole image, then paint ONLY the chosen class in full color.
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, W, H);
+    const c = classes[isolateIdx];
+    if (!c) return;
+    const color = PARSE_PALETTE[isolateIdx % PARSE_PALETTE.length];
+    const img = new Image();
+    img.onload = () => {
+      // Restore the ORIGINAL pixels of the class (not just a tint)
+      // by compositing the base image through the class mask.
+      const off = document.createElement("canvas");
+      off.width = W; off.height = H;
+      const octx = off.getContext("2d");
+      octx.drawImage(img, 0, 0, W, H);
+      octx.globalCompositeOperation = "source-in";
+      octx.drawImage(segSourceImage, 0, 0, W, H);
+      ctx.drawImage(off, 0, 0);
+      // Tint outline + label
+      if (c.bbox) {
+        const [x0, y0, x1, y1] = c.bbox;
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
+        const label = `${c.class_name} - ${(c.fill_fraction*100).toFixed(0)}%`;
+        ctx.font = "bold 16px system-ui, sans-serif";
+        const w = ctx.measureText(label).width + 14;
+        ctx.fillStyle = color;
+        ctx.fillRect(x0 * W, y0 * H, w, 24);
+        ctx.fillStyle = "#000";
+        ctx.fillText(label, x0 * W + 7, y0 * H + 18);
+      }
+    };
+    img.src = "data:image/png;base64," + c.mask_png_base64;
+    return;
+  }
+  // Full mode: tint every class
+  let colorIdx = 0;
+  for (const c of classes) {
+    const color = PARSE_PALETTE[colorIdx % PARSE_PALETTE.length];
+    colorIdx++;
+    const img = new Image();
+    const colorForClosure = color;
+    const classForClosure = c;
+    img.onload = () => {
+      const off = document.createElement("canvas");
+      off.width = W; off.height = H;
+      const octx = off.getContext("2d");
+      octx.drawImage(img, 0, 0, W, H);
+      octx.globalCompositeOperation = "source-in";
+      octx.fillStyle = colorForClosure;
+      octx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 0.42;
+      ctx.drawImage(off, 0, 0);
+      ctx.globalAlpha = 1.0;
+      if (classForClosure.bbox) {
+        const [x0, y0, x1, y1] = classForClosure.bbox;
+        ctx.strokeStyle = colorForClosure;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
+        const label = `${classForClosure.class_name} ${(classForClosure.fill_fraction * 100).toFixed(0)}%`;
+        ctx.font = "bold 14px system-ui, sans-serif";
+        const w = ctx.measureText(label).width + 10;
+        ctx.fillStyle = colorForClosure;
+        ctx.fillRect(x0 * W, y0 * H, w, 20);
+        ctx.fillStyle = "#000";
+        ctx.fillText(label, x0 * W + 5, y0 * H + 15);
+      }
+    };
+    img.src = "data:image/png;base64," + c.mask_png_base64;
+  }
+}
+
 segCanvas.addEventListener("click", async (e) => {
   // In live mode the dedicated live-mode handler owns the clicks.
   if (segLiveStream) return;
@@ -951,6 +1210,28 @@ segCanvas.addEventListener("click", async (e) => {
   // Account for canvas CSS scaling
   const nx = (e.clientX - rect.left) / rect.width;
   const ny = (e.clientY - rect.top) / rect.height;
+
+  // If a scene parse was run, prefer isolating the clicked class
+  // over invoking magic_touch. The user clicks the wall -> wall isolates
+  // + its download button is right there. One click, no round-trip.
+  if (segSceneResult && segSceneResult.classes && segSceneResult.classes.length) {
+    const hit = findSceneClassAtPoint(nx, ny);
+    if (hit !== null) {
+      segIsolatedIdx = hit;
+      drawSceneParse(segSceneResult, hit);
+      highlightRow(hit);
+      const c = segSceneResult.classes[hit];
+      document.getElementById("seg-point").textContent = c.class_name;
+      document.getElementById("seg-bbox").textContent = c.bbox
+        ? c.bbox.map(v => (v*100).toFixed(1) + "%").join(", ") : "—";
+      document.getElementById("seg-pixels").textContent = c.pixel_count.toLocaleString();
+      document.getElementById("seg-fill").textContent = (c.fill_fraction * 100).toFixed(1) + "%";
+      document.getElementById("seg-status").textContent =
+        `isolated: ${c.class_name}. Download from the sidebar to save as PNG with alpha.`;
+      return;
+    }
+  }
+
   document.getElementById("seg-status").textContent = "segmenting...";
   document.getElementById("seg-point").textContent = `${(nx*100).toFixed(1)}%, ${(ny*100).toFixed(1)}%`;
   try {

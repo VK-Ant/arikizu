@@ -37,6 +37,37 @@ def _b64_to_rgb_np(image_base64: str):
     return np.array(img), data
 
 
+# ADE20K 150-class semantic labels. Covers indoor + outdoor scenes.
+# Order is the official ADE20K class index 0..149.
+_ADE20K_NAMES = [
+    "wall", "building", "sky", "floor", "tree", "ceiling", "road",
+    "bed", "windowpane", "grass", "cabinet", "sidewalk", "person",
+    "earth", "door", "table", "mountain", "plant", "curtain", "chair",
+    "car", "water", "painting", "sofa", "shelf", "house", "sea",
+    "mirror", "rug", "field", "armchair", "seat", "fence", "desk",
+    "rock", "wardrobe", "lamp", "bathtub", "railing", "cushion",
+    "base", "box", "column", "signboard", "chest_of_drawers", "counter",
+    "sand", "sink", "skyscraper", "fireplace", "refrigerator",
+    "grandstand", "path", "stairs", "runway", "case", "pool_table",
+    "pillow", "screen_door", "stairway", "river", "bridge", "bookcase",
+    "blind", "coffee_table", "toilet", "flower", "book", "hill",
+    "bench", "countertop", "stove", "palm_tree", "kitchen_island",
+    "computer", "swivel_chair", "boat", "bar", "arcade_machine",
+    "hovel", "bus", "towel", "light", "truck", "tower", "chandelier",
+    "awning", "streetlight", "booth", "television", "airplane",
+    "dirt_track", "clothes", "pole", "land", "bannister", "escalator",
+    "ottoman", "bottle", "buffet", "poster", "stage", "van", "ship",
+    "fountain", "conveyer_belt", "canopy", "washer", "plaything",
+    "swimming_pool", "stool", "barrel", "basket", "waterfall", "tent",
+    "bag", "minibike", "cradle", "oven", "ball", "food", "step",
+    "tank", "trade_name", "microwave", "pot", "animal", "bicycle",
+    "lake", "dishwasher", "screen", "blanket", "sculpture", "hood",
+    "sconce", "vase", "traffic_light", "tray", "ashcan", "fan", "pier",
+    "crt_screen", "plate", "monitor", "bulletin_board", "shower",
+    "radiator", "glass", "clock", "flag",
+]
+
+
 def _fix_hint_for(backend_tag: str, err: str) -> str:
     """Return a specific fix command for a given error class."""
     err_low = err.lower()
@@ -480,6 +511,111 @@ def main() -> None:
             }
         except Exception as e:
             return {"error": f"segmentation failed: {e}", "backend": "inference-failed"}
+
+    @worker.handler("video.scene_parse")
+    def scene_parse(image_base64: str = "", top_k: int = 10) -> dict[str, Any]:
+        """Semantic scene segmentation with SegFormer-B0 (512x512, ADE20K
+        150 classes). Covers both indoor (wall, floor, chair, bed, sofa,
+        table, lamp, window, door, ceiling, person, ...) and outdoor
+        (sky, road, building, tree, grass, car, sidewalk, mountain, water,
+        field, ...) scenes.
+
+        Returns per-class mask summary: {class_name, pixel_count, bbox,
+        fill_fraction}. Top-K classes by pixel count are returned.
+        """
+        import base64 as _b64
+        import io as _io
+        import time
+        if not image_base64:
+            return {"error": "image_base64 required"}
+        try:
+            import numpy as np
+            from PIL import Image
+            import onnxruntime as ort
+        except ImportError as e:
+            return {"error": f"onnxruntime or PIL missing: {e}", "backend": "no-onnx",
+                    "fix_hint": "pip install onnxruntime pillow"}
+
+        try:
+            model_path = models.ensure("segformer_b0_int8")
+        except Exception as e:
+            return {"error": f"segformer model not available: {e}", "backend": "no-model",
+                    "fix_hint": "scripts/download-video-models.sh or ensure segformer_b0_ade20k_512_int8.onnx is in models/"}
+
+        try:
+            t = time.perf_counter()
+            raw = _b64.b64decode(image_base64)
+            pil = Image.open(_io.BytesIO(raw)).convert("RGB")
+            orig_w, orig_h = pil.size
+            img = pil.resize((512, 512), Image.BILINEAR)
+            arr = np.asarray(img, dtype=np.float32) / 255.0
+            # ImageNet normalization
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            # NCHW
+            arr = arr.transpose(2, 0, 1)[None, :, :, :]
+
+            # Pick the best provider that's actually available on this box.
+            # Jetson -> TensorRT or CUDA; Mac -> CoreML; Pi/x86 -> CPU.
+            available = set(ort.get_available_providers())
+            preference = [
+                "TensorrtExecutionProvider",
+                "CUDAExecutionProvider",
+                "CoreMLExecutionProvider",
+                "OpenVINOExecutionProvider",
+                "CPUExecutionProvider",
+            ]
+            providers = [p for p in preference if p in available] or ["CPUExecutionProvider"]
+            sess = ort.InferenceSession(str(model_path), providers=providers)
+            in_name = sess.get_inputs()[0].name
+            logits = sess.run(None, {in_name: arr})[0]   # (1, 150, H', W')
+            cls_map = np.argmax(logits[0], axis=0).astype(np.int32)   # (H', W')
+
+            # Upsample to input resolution via nearest neighbor
+            cls_pil = Image.fromarray(cls_map.astype(np.uint8), mode="L")
+            cls_pil = cls_pil.resize((orig_w, orig_h), Image.NEAREST)
+            cls_full = np.asarray(cls_pil)
+
+            total_px = orig_w * orig_h
+            vals, counts = np.unique(cls_full, return_counts=True)
+            pairs = sorted(zip(vals.tolist(), counts.tolist()), key=lambda vc: -vc[1])
+            top = pairs[: max(1, int(top_k))]
+
+            classes_out = []
+            for v, c in top:
+                mask = (cls_full == v)
+                ys, xs = np.where(mask)
+                if len(xs) == 0:
+                    continue
+                bbox = [float(xs.min() / orig_w), float(ys.min() / orig_h),
+                        float(xs.max() / orig_w), float(ys.max() / orig_h)]
+                # Encode this class's mask as a tiny PNG for the UI to overlay
+                m8 = (mask.astype(np.uint8)) * 255
+                buf = _io.BytesIO()
+                Image.fromarray(m8, mode="L").save(buf, format="PNG", optimize=True)
+                mask_b64 = _b64.b64encode(buf.getvalue()).decode("ascii")
+                classes_out.append({
+                    "class_id": int(v),
+                    "class_name": _ADE20K_NAMES[v] if 0 <= v < len(_ADE20K_NAMES) else f"class_{v}",
+                    "pixel_count": int(c),
+                    "fill_fraction": round(c / float(total_px), 3),
+                    "bbox": bbox,
+                    "mask_png_base64": mask_b64,
+                })
+            ms = round((time.perf_counter() - t) * 1000, 1)
+            # Report the actual provider used (first in the session's list)
+            used_provider = sess.get_providers()[0] if sess.get_providers() else "unknown"
+            return {
+                "classes": classes_out,
+                "image_width": orig_w, "image_height": orig_h,
+                "model": "segformer_b0_ade20k_512_int8",
+                "backend": "onnx",
+                "provider": used_provider,
+                "ms": ms,
+            }
+        except Exception as e:
+            return {"error": f"scene_parse failed: {e}", "backend": "inference-failed"}
 
     @worker.handler("video.save_segment")
     def save_segment(name: str = "", image_base64: str = "", mask_png_base64: str = "",

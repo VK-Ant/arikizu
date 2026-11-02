@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipelines</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#0a0a0a; --muted:#666666; --accent:#ff6b1a;
+    --card:#ffffff; --border:#e5e5e5; --pass:#2d8a4e; --fail:#b84040; --wait:#c89520;
+    --mono: ui-monospace, Menlo, Consolas, monospace;
+    --sans: -apple-system, system-ui, Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0a0a0a; --fg:#ffffff; --muted:#999999; --accent:#ff8a3a;
+            --card:#141414; --border:#2a2a2a; color-scheme: dark; }
+  }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{padding:20px 32px;border-bottom:1px solid var(--border)}
+  header h1{margin:0;font-size:22px;letter-spacing:-0.01em}
+  header .tag{color:var(--muted);font-size:13px;margin-top:4px}
+  main{padding:24px 32px;max-width:1200px;margin:0 auto}
+
+  .explainer{background:rgba(255,107,26,0.08);border:1px solid rgba(255,107,26,0.25);
+    border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:13px;line-height:1.6}
+  .explainer h2{margin:0 0 8px;font-size:14px;color:var(--accent);letter-spacing:0.05em}
+  .explainer code{background:var(--card);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px}
+
+  .controls{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+  button{font:inherit;background:var(--accent);color:#fff;border:none;border-radius:6px;
+    padding:8px 16px;cursor:pointer;font-weight:600}
+  button.sec{background:var(--card);color:var(--fg);border:1px solid var(--border)}
+  button:disabled{opacity:0.5;cursor:not-allowed}
+  .stats{color:var(--muted);font-size:13px}
+
+  .empty{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    padding:32px;text-align:center}
+  .empty h2{font-size:17px;margin:0 0 10px}
+  .empty p{color:var(--muted);margin:0 0 12px}
+  .empty pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+    padding:12px;text-align:left;font-family:var(--mono);font-size:12px;
+    display:inline-block;max-width:100%;overflow-x:auto}
+
+  .pipe{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    padding:20px 22px;margin-bottom:14px}
+  .pipe-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .pipe-name{font-size:16px;font-weight:700}
+  .pipe-trigger{display:inline-block;font-family:var(--mono);font-size:11px;
+    background:rgba(255,107,26,0.1);color:var(--accent);padding:2px 10px;
+    border-radius:10px;border:1px solid rgba(255,107,26,0.3);margin-left:8px}
+  .pipe-trigger.schedule{background:rgba(200,149,32,0.1);color:var(--wait);border-color:rgba(200,149,32,0.3)}
+  .pipe-desc{color:var(--muted);font-size:13px;margin:8px 0}
+  .pipe-meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px}
+  .pipe-actions{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+
+  details{margin-top:14px}
+  details summary{cursor:pointer;color:var(--muted);font-size:12px;user-select:none}
+  details summary:hover{color:var(--accent)}
+
+  .run-form{display:none;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)}
+  .pipe.open .run-form{display:block}
+  textarea{font:inherit;font-family:var(--mono);font-size:12px;background:var(--bg);
+    color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:10px;width:100%;
+    min-height:70px;resize:vertical}
+  pre.out{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+    padding:12px;font-family:var(--mono);font-size:11px;max-height:360px;overflow:auto;
+    white-space:pre-wrap;word-wrap:break-word;margin:0}
+  .stage-row{display:flex;align-items:start;gap:10px;padding:4px 0;font-family:var(--mono);font-size:11px}
+  .stage-marker{width:14px;flex-shrink:0}
+  .stage-marker.ok{color:var(--pass)} .stage-marker.err{color:var(--fail)}
+  .stage-marker.skip{color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pipelines</h1>
+  <div class="tag">YAML workflows that chain capabilities together. Run them manually or on a schedule.</div>
+</header>
+<main>
+  <div class="explainer">
+    <h2>WHAT IS A PIPELINE?</h2>
+    A pipeline is a <code>.yaml</code> file in the <code>pipelines/</code> folder that lists stages.
+    Each stage calls one capability (like <code>vision.detect</code> or <code>reasoning.answer</code>),
+    passes its output to the next stage, and ends with actions (audit log, webhook, etc).
+    Build one when you want <strong>several capabilities to run as a single unit</strong>, either on
+    demand or on a schedule. See <a href="/pipelines/" style="color:var(--accent)">the full guide</a>.
+  </div>
+
+  <div class="controls">
+    <button id="reload-btn">Reload pipelines</button>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <div id="list"></div>
+</main>
+
+<script>
+"use strict";
+const API = "/api/v1";
+
+async function callCap(cap, payload = {}) {
+  const r = await fetch(`${API}/call/${cap.replace(".", "/")}`, {
+    method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({payload}),
+  });
+  const j = await r.json();
+  return {ok: r.ok, status: r.status, body: j};
+}
+
+async function loadList() {
+  const el = document.getElementById("list");
+  el.innerHTML = `<div class="pipe-meta">loading...</div>`;
+  const res = await callCap("pipeline.list", {});
+  if (!res.ok) {
+    renderNotRunning(res.status, res.body);
+    return;
+  }
+  const pipes = (res.body && res.body.pipelines) || [];
+  document.getElementById("stats").textContent =
+    pipes.length === 0 ? "no pipelines loaded" : `${pipes.length} pipeline(s) loaded`;
+  if (pipes.length === 0) {
+    renderNoPipelines();
+    return;
+  }
+  el.innerHTML = pipes.map(renderCard).join("");
+  wireCards();
+}
+
+function renderNotRunning(status, body) {
+  const el = document.getElementById("list");
+  document.getElementById("stats").textContent = "pipeline worker not running";
+  const detail = (body && body.error) ? body.error : `HTTP ${status}`;
+  el.innerHTML = `
+    <div class="empty">
+      <h2>Pipeline worker is not running</h2>
+      <p>Pipelines are an opt-in feature. To enable them:</p>
+      <pre># 1. Enable the pipeline worker in arikizu.yaml
+#    (uncomment the "pipeline" block in workers:)
+
+# 2. Enable the pipeline capabilities
+mv capabilities.d/_pipeline.toml.example capabilities.d/pipeline.toml
+
+# 3. Activate the demo pipeline (optional, nice to see one working)
+mv pipelines/_hello.yaml.example pipelines/hello.yaml
+
+# 4. Restart Arikizu
+make run
+</pre>
+      <p style="margin-top:16px;font-size:12px;color:var(--muted)">${detail}</p>
+    </div>`;
+}
+
+function renderNoPipelines() {
+  const el = document.getElementById("list");
+  el.innerHTML = `
+    <div class="empty">
+      <h2>Pipeline worker is running — no pipelines loaded yet</h2>
+      <p>Drop a YAML file in the <code>pipelines/</code> folder and click <strong>Reload pipelines</strong> above.</p>
+      <p>To see the shipped example running, rename it so the loader picks it up:</p>
+      <pre>mv pipelines/_hello.yaml.example pipelines/hello.yaml</pre>
+      <p style="margin-top:12px"><a href="/pipelines/" style="color:var(--accent)">Read the pipeline guide</a> for the YAML grammar and 5 real-world examples.</p>
+    </div>`;
+}
+
+function renderCard(p) {
+  const safeId = p.name.replace(/[^a-z0-9]/gi, "_");
+  const triggerCls = p.trigger === "schedule" ? "schedule" : "";
+  const cronNote = p.cron ? ` · <code>${p.cron}</code>` : "";
+  return `
+    <div class="pipe" id="pipe-${safeId}">
+      <div class="pipe-head">
+        <div>
+          <span class="pipe-name">${p.name}</span>
+          <span class="pipe-trigger ${triggerCls}">${p.trigger}${cronNote}</span>
+        </div>
+        <div>
+          <button class="sec" data-toggle="${safeId}">Run with custom inputs</button>
+          <button data-quick-run="${p.name}">Run now</button>
+        </div>
+      </div>
+      ${p.description ? `<div class="pipe-desc">${p.description}</div>` : ""}
+      <div class="pipe-meta">${p.stage_count} stage(s) · from <code>${p.source_file}</code></div>
+      <div class="run-form">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Inputs (JSON, optional — overrides pipeline defaults)</div>
+        <textarea id="in-${safeId}">{}</textarea>
+        <div style="margin-top:10px"><button data-custom-run="${p.name}" data-src="${safeId}">Run with these inputs</button></div>
+      </div>
+      <details id="out-wrap-${safeId}"><summary>last run output</summary>
+        <pre class="out" id="out-${safeId}">(no run yet)</pre>
+      </details>
+    </div>`;
+}
+
+function wireCards() {
+  document.querySelectorAll("[data-toggle]").forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-toggle");
+      document.getElementById(`pipe-${id}`).classList.toggle("open");
+    };
+  });
+  document.querySelectorAll("[data-quick-run]").forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const name = b.getAttribute("data-quick-run");
+      runPipeline(name, {}, name.replace(/[^a-z0-9]/gi, "_"), b);
+    };
+  });
+  document.querySelectorAll("[data-custom-run]").forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const name = b.getAttribute("data-custom-run");
+      const src = b.getAttribute("data-src");
+      let inputs;
+      try {
+        inputs = JSON.parse(document.getElementById(`in-${src}`).value || "{}");
+      } catch (err) {
+        document.getElementById(`out-${src}`).innerHTML =
+          `<span style="color:var(--fail)">inputs not valid JSON: ${err.message}</span>`;
+        return;
+      }
+      runPipeline(name, inputs, src, b);
+    };
+  });
+}
+
+async function runPipeline(name, inputs, safeId, btn) {
+  const out = document.getElementById(`out-${safeId}`);
+  const wrap = document.getElementById(`out-wrap-${safeId}`);
+  wrap.open = true;
+  out.textContent = "running...";
+  btn.disabled = true;
+  const t0 = performance.now();
+  try {
+    const res = await callCap("pipeline.run", {name, inputs});
+    const ms = Math.round(performance.now() - t0);
+    if (!res.ok) {
+      out.innerHTML = `<span style="color:var(--fail)">HTTP ${res.status}: ${JSON.stringify(res.body)}</span>`;
+    } else {
+      out.textContent = renderReport(res.body, ms);
+    }
+  } catch (e) {
+    out.innerHTML = `<span style="color:var(--fail)">request failed: ${e.message}</span>`;
+  }
+  btn.disabled = false;
+}
+
+function renderReport(r, ms) {
+  const lines = [];
+  lines.push(`${r.ok ? "OK" : "FAIL"} - ${r.duration_ms || ms} ms`);
+  lines.push("");
+  lines.push("STAGES:");
+  for (const [name, out] of Object.entries(r.stages || {})) {
+    const marker = out && out.error ? "x" : (out && out.skipped ? "-" : "o");
+    const summary = out && out.error
+      ? `error: ${out.error}`
+      : (out && out.skipped ? `skipped: ${out.reason || ""}` : JSON.stringify(out).slice(0, 160));
+    lines.push(`  ${marker} ${name}: ${summary}`);
+  }
+  if (r.actions && r.actions.length) {
+    lines.push("");
+    lines.push("ACTIONS:");
+    for (const a of r.actions) {
+      const marker = a.error ? "x" : (a.skipped ? "-" : "o");
+      lines.push(`  ${marker} ${a.type}: ${JSON.stringify(a).slice(0, 160)}`);
+    }
+  }
+  lines.push("");
+  lines.push("FULL JSON:");
+  lines.push(JSON.stringify(r, null, 2));
+  return lines.join("\n");
+}
+
+document.getElementById("reload-btn").onclick = async () => {
+  const btn = document.getElementById("reload-btn");
+  btn.disabled = true;
+  try {
+    await callCap("pipeline.reload", {});
+    await loadList();
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+loadList();
+</script>
+</body>
+</html>

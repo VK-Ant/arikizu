@@ -60,12 +60,21 @@
 <body>
 <header>
   <div>
-    <h1>Capability Catalog</h1>
-    <div class="tag">Every capability on this instance. Click to expand, hit <b>Try it</b> to call live from the browser.</div>
+    <h1>API Explorer</h1>
+    <div class="tag">Every capability on this instance. Click to expand, hit <b>Call</b> to run live from the browser.</div>
   </div>
   <div class="stats" id="stats">loading...</div>
 </header>
 <main>
+  <div style="background:rgba(255,107,26,0.08);border:1px solid rgba(255,107,26,0.25);
+    border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:13px;line-height:1.55">
+    <strong style="color:var(--accent);font-size:11px;letter-spacing:0.05em">WHAT IS A CAPABILITY?</strong><br>
+    A capability is one thing Arikizu can do (<code style="font-family:var(--mono);font-size:12px">vision.detect</code>,
+    <code style="font-family:var(--mono);font-size:12px">reasoning.answer</code>, <code style="font-family:var(--mono);font-size:12px">audio.transcribe</code>...).
+    Each one is reachable at <code style="font-family:var(--mono);font-size:12px">POST /api/v1/call/&lt;name&gt;</code>.
+    When you build your own HTML page, Python app, agent, or pipeline, these are the building blocks you call.
+    Use <strong>Call</strong> below to try one; <strong>Copy curl</strong> gives you the shell command.
+  </div>
   <div class="filters">
     <input id="q" type="text" placeholder="filter by name (e.g. vision, audio, hello)">
     <select id="worker-filter"><option value="">all workers</option></select>

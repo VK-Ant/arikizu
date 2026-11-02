@@ -530,3 +530,13 @@ priority = 0
 # feedback.annotate POST /api/v1/feedback/annotate
 # feedback.pending GET /api/v1/feedback/pending
 
+
+# ---------------------------------------------------------------------------
+# Scene parsing (SegFormer-B0 ADE20K 512x512, indoor+outdoor 150 classes)
+# ---------------------------------------------------------------------------
+[video_scene_parse]
+name = "video.scene_parse"
+worker = "video"
+input = { image_base64 = "string", top_k = "integer" }
+output = "object"
+timeout_ms = 30000
