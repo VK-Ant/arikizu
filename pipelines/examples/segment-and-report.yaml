@@ -1,0 +1,43 @@
+# Segment an image, then let the LLM write a one-paragraph summary of
+# what it found. Shows how to USE instance_segment + scene_parse +
+# reasoning.answer together in one YAML pipeline. No HTML, no Python.
+#
+# Run:
+#   curl -X POST http://127.0.0.1:7000/api/v1/call/pipeline/run \
+#     -H 'content-type: application/json' \
+#     -d '{"payload": {"name": "segment_and_report",
+#                       "inputs": {"image_base64": "<your base64 jpeg>"}}}'
+
+name: segment_and_report
+description: Segment the image with YOLO + SegFormer, then summarize what's in it.
+
+inputs:
+  image_base64: ""
+  min_confidence: 0.30
+
+stages:
+  - name: yolo
+    capability: video.instance_segment
+    inputs:
+      image_base64: "{{inputs.image_base64}}"
+      confidence: "{{inputs.min_confidence}}"
+      iou: 0.45
+
+  - name: scene
+    capability: video.scene_parse
+    inputs:
+      image_base64: "{{inputs.image_base64}}"
+      top_k: 8
+
+  - name: summary
+    capability: reasoning.answer
+    inputs:
+      question: |
+        Describe this frame in one short paragraph. Objects detected
+        (name, confidence): {{yolo.instances | json}}. Scene surfaces
+        (name, %): {{scene.classes | json}}. Keep it under 60 words.
+      max_tokens: 160
+
+actions:
+  - type: audit
+    message: "segment_and_report: {{yolo.count}} objects, {{scene.classes | length}} scene classes - {{summary.answer}}"

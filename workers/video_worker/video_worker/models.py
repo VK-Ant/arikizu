@@ -119,6 +119,14 @@ REGISTRY: dict[str, dict[str, Any]] = {
         "mb": 15.3, "backend": "onnx", "license": "NVIDIA SegFormer license",
         "purpose": "Scene parser f16 (more accurate, larger)",
     },
+    # Instance segmentation (per-object masks, COCO 80 classes).
+    # Nano variant is ~13 MB and runs on Pi 5 + Jetson easily.
+    "yolov8n_seg": {
+        "file": "yolov8n-seg.onnx",
+        "url": f"{HF_BASE}/qualcomm/YOLOv8-Segmentation/resolve/main/YOLOv8-Segmentation.onnx",
+        "mb": 13.0, "backend": "onnx", "license": "AGPL-3.0",
+        "purpose": "YOLOv8-nano instance segmentation (per-object masks, 80 classes)",
+    },
     # VLM (multimodal action search)
     "qwen2_5_vl_3b_q4": {
         "file": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",

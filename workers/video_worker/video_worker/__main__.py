@@ -37,6 +37,61 @@ def _b64_to_rgb_np(image_base64: str):
     return np.array(img), data
 
 
+# COCO 80 class names for YOLOv8 instance segmentation.
+_COCO_NAMES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
+    "truck", "boat", "traffic light", "fire hydrant", "stop sign",
+    "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep",
+    "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
+    "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard",
+    "sports ball", "kite", "baseball bat", "baseball glove", "skateboard",
+    "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork",
+    "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+    "couch", "potted plant", "bed", "dining table", "toilet", "tv",
+    "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
+    "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
+    "scissors", "teddy bear", "hair drier", "toothbrush",
+]
+
+
+def _nms(x1, y1, x2, y2, scores, class_ids, iou_thresh: float = 0.45):
+    """Per-class non-max suppression. Returns indices to keep, highest
+    score first. Lightweight numpy implementation so we don't drag in
+    torchvision.ops."""
+    import numpy as np
+    keep: list[int] = []
+    for cls in np.unique(class_ids):
+        cls_mask = class_ids == cls
+        idxs = np.where(cls_mask)[0]
+        if len(idxs) == 0:
+            continue
+        order = idxs[np.argsort(-scores[idxs])]
+        while len(order) > 0:
+            i = int(order[0])
+            keep.append(i)
+            if len(order) == 1:
+                break
+            rest = order[1:]
+            xx1 = np.maximum(x1[i], x1[rest])
+            yy1 = np.maximum(y1[i], y1[rest])
+            xx2 = np.minimum(x2[i], x2[rest])
+            yy2 = np.minimum(y2[i], y2[rest])
+            w = np.maximum(0.0, xx2 - xx1)
+            h = np.maximum(0.0, yy2 - yy1)
+            inter = w * h
+            area_i = max(0.0, (x2[i] - x1[i]) * (y2[i] - y1[i]))
+            area_r = np.maximum(0.0, (x2[rest] - x1[rest]) * (y2[rest] - y1[rest]))
+            union = area_i + area_r - inter + 1e-9
+            iou = inter / union
+            order = rest[iou <= iou_thresh]
+    # Return by score descending across classes
+    keep_arr = np.array(keep, dtype=np.int64)
+    if len(keep_arr) == 0:
+        return keep_arr
+    return keep_arr[np.argsort(-scores[keep_arr])]
+
+
 # ADE20K 150-class semantic labels. Covers indoor + outdoor scenes.
 # Order is the official ADE20K class index 0..149.
 _ADE20K_NAMES = [
@@ -724,6 +779,221 @@ def main() -> None:
             }
         except Exception as e:
             return {"error": f"segmentation failed: {e}", "backend": "inference-failed"}
+
+    @worker.handler("video.instance_segment")
+    def instance_segment(image_base64: str = "", confidence: float = 0.30,
+                         iou: float = 0.45, max_detections: int = 50,
+                         classes: list | None = None) -> dict[str, Any]:
+        """YOLOv8-nano instance segmentation. Returns a per-object mask
+        for every detected person, chair, laptop, bottle, dog, etc.
+
+        No interactive click needed - just send a frame, get back a list
+        of instances with class name, confidence, bbox, mask, and a tightly
+        cropped RGBA PNG (transparent background) ready to download.
+
+        Classes come from COCO 80: person, bicycle, car, motorcycle, bus,
+        truck, cat, dog, chair, couch, bed, dining table, toilet, tv,
+        laptop, mouse, remote, keyboard, cell phone, book, clock, vase,
+        scissors, teddy bear, hair drier, toothbrush, and more.
+
+        Args:
+            image_base64: input frame (jpeg or png)
+            confidence: minimum detection score (0..1), default 0.30
+            iou: NMS IoU threshold, default 0.45
+            max_detections: hard cap on returned instances
+            classes: optional list of class names to keep (e.g. ["person","chair"])
+
+        Returns:
+            {"instances": [...], "ms": N, "provider": "...", "count": N}
+            each instance has: {instance_id, class_id, class_name, confidence,
+                                bbox, mask_png_base64, crop_png_base64,
+                                crop_width, crop_height, pixel_count}
+        """
+        import base64 as _b64
+        import io as _io
+        import time
+        if not image_base64:
+            return {"error": "image_base64 required"}
+        try:
+            import numpy as np
+            from PIL import Image
+            import onnxruntime as ort
+        except ImportError as e:
+            return {"error": f"onnxruntime or PIL missing: {e}", "backend": "no-onnx",
+                    "fix_hint": "pip install onnxruntime pillow"}
+
+        try:
+            model_path = models.ensure("yolov8n_seg")
+        except Exception as e:
+            return {"error": f"yolov8n-seg model not available: {e}",
+                    "backend": "no-model",
+                    "fix_hint": "scripts/download-video-models.sh (adds yolov8n-seg.onnx)"}
+
+        try:
+            t = time.perf_counter()
+            raw = _b64.b64decode(image_base64)
+            pil = Image.open(_io.BytesIO(raw)).convert("RGB")
+            orig_w, orig_h = pil.size
+
+            # Letterbox to 640x640 (preserve aspect ratio)
+            SIZE = 640
+            scale = min(SIZE / orig_w, SIZE / orig_h)
+            new_w = int(round(orig_w * scale))
+            new_h = int(round(orig_h * scale))
+            pad_x = (SIZE - new_w) // 2
+            pad_y = (SIZE - new_h) // 2
+            resized = pil.resize((new_w, new_h), Image.BILINEAR)
+            canvas = Image.new("RGB", (SIZE, SIZE), (114, 114, 114))
+            canvas.paste(resized, (pad_x, pad_y))
+            arr = np.asarray(canvas, dtype=np.float32) / 255.0
+            arr = arr.transpose(2, 0, 1)[None, :, :, :]
+
+            available = set(ort.get_available_providers())
+            preference = ["TensorrtExecutionProvider", "CUDAExecutionProvider",
+                          "CoreMLExecutionProvider", "OpenVINOExecutionProvider",
+                          "CPUExecutionProvider"]
+            providers = [p for p in preference if p in available] or ["CPUExecutionProvider"]
+
+            sess = ort.InferenceSession(str(model_path), providers=providers)
+            inputs = {sess.get_inputs()[0].name: arr}
+            outputs = sess.run(None, inputs)
+            # YOLOv8-seg has two outputs:
+            #   out0: (1, 116, 8400) -> 4 bbox + 80 classes + 32 mask coefficients
+            #   out1: (1, 32, 160, 160) -> 32 mask prototypes
+            if len(outputs) < 2:
+                return {"error": "ONNX model doesn't look like YOLOv8-seg "
+                                 "(expected 2 outputs)", "backend": "wrong-model"}
+            dets_raw, protos = outputs[0], outputs[1]
+            # Transpose detections -> (8400, 116)
+            dets = dets_raw[0].T
+            boxes = dets[:, :4]            # cx, cy, w, h in 640-space
+            cls_scores = dets[:, 4:4+80]
+            mask_coeffs = dets[:, 4+80:]   # (8400, 32)
+
+            class_ids = cls_scores.argmax(axis=1)
+            scores = cls_scores.max(axis=1)
+            keep = scores >= float(confidence)
+            if keep.sum() == 0:
+                ms = round((time.perf_counter() - t) * 1000, 1)
+                return {"instances": [], "count": 0, "ms": ms,
+                        "provider": sess.get_providers()[0]}
+            boxes = boxes[keep]
+            class_ids = class_ids[keep]
+            scores = scores[keep]
+            mask_coeffs = mask_coeffs[keep]
+
+            # Optional class filter
+            if classes:
+                keep_names = {str(x).lower() for x in classes}
+                keep_mask = np.array([_COCO_NAMES[int(ci)].lower() in keep_names
+                                      for ci in class_ids])
+                boxes = boxes[keep_mask]
+                class_ids = class_ids[keep_mask]
+                scores = scores[keep_mask]
+                mask_coeffs = mask_coeffs[keep_mask]
+                if len(boxes) == 0:
+                    ms = round((time.perf_counter() - t) * 1000, 1)
+                    return {"instances": [], "count": 0, "ms": ms,
+                            "provider": sess.get_providers()[0]}
+
+            # cx,cy,w,h -> x1,y1,x2,y2 in 640-space
+            x1 = boxes[:, 0] - boxes[:, 2] / 2
+            y1 = boxes[:, 1] - boxes[:, 3] / 2
+            x2 = boxes[:, 0] + boxes[:, 2] / 2
+            y2 = boxes[:, 1] + boxes[:, 3] / 2
+            # NMS per class
+            kept_idx = _nms(x1, y1, x2, y2, scores, class_ids, iou_thresh=float(iou))
+            kept_idx = kept_idx[:int(max_detections)]
+            if len(kept_idx) == 0:
+                ms = round((time.perf_counter() - t) * 1000, 1)
+                return {"instances": [], "count": 0, "ms": ms,
+                        "provider": sess.get_providers()[0]}
+
+            # Mask reconstruction: proto (32,160,160) · coeffs (K,32) -> (K,160,160)
+            proto_flat = protos[0].reshape(32, -1)                  # (32, 25600)
+            kept_coeffs = mask_coeffs[kept_idx]                      # (K, 32)
+            masks_low = (kept_coeffs @ proto_flat).reshape(-1, 160, 160)
+            masks_low = 1.0 / (1.0 + np.exp(-masks_low))             # sigmoid
+            # Scale 160 -> 640 and crop by bbox, then unletterbox to orig size.
+            instances_out = []
+            for i, det_i in enumerate(kept_idx):
+                cls_id = int(class_ids[det_i])
+                score = float(scores[det_i])
+                bx1 = float(x1[det_i]); by1 = float(y1[det_i])
+                bx2 = float(x2[det_i]); by2 = float(y2[det_i])
+                # Upsample mask to 640 and threshold
+                mlow = masks_low[i]
+                mimg = Image.fromarray((mlow * 255).astype(np.uint8), mode="L")
+                mimg = mimg.resize((SIZE, SIZE), Image.BILINEAR)
+                mfull = np.asarray(mimg)
+                # Zero outside bbox so it doesn't bleed into other objects
+                bx1_c, by1_c = int(max(0, bx1)), int(max(0, by1))
+                bx2_c, by2_c = int(min(SIZE, bx2)), int(min(SIZE, by2))
+                mboxed = np.zeros_like(mfull)
+                mboxed[by1_c:by2_c, bx1_c:bx2_c] = mfull[by1_c:by2_c, bx1_c:bx2_c]
+                binary = (mboxed > 128).astype(np.uint8) * 255
+                # Unletterbox to original frame coords
+                un = Image.fromarray(binary, mode="L")
+                # Crop out letterbox padding, then resize to orig
+                padded_crop = un.crop((pad_x, pad_y, pad_x + new_w, pad_y + new_h))
+                mask_orig = np.asarray(padded_crop.resize((orig_w, orig_h), Image.NEAREST))
+
+                ys, xs = np.where(mask_orig > 0)
+                if len(xs) == 0:
+                    continue
+                ox0, oy0 = int(xs.min()), int(ys.min())
+                ox1, oy1 = int(xs.max()), int(ys.max())
+                bbox = [ox0 / orig_w, oy0 / orig_h, ox1 / orig_w, oy1 / orig_h]
+
+                # Full-frame mask PNG (for canvas overlay)
+                buf_full = _io.BytesIO()
+                Image.fromarray(mask_orig, mode="L").save(buf_full, format="PNG",
+                                                          optimize=True)
+                mask_b64 = _b64.b64encode(buf_full.getvalue()).decode("ascii")
+
+                # Cropped RGBA PNG (download-ready)
+                pad = 4
+                cx0 = max(0, ox0 - pad)
+                cy0 = max(0, oy0 - pad)
+                cx1 = min(orig_w, ox1 + 1 + pad)
+                cy1 = min(orig_h, oy1 + 1 + pad)
+                rgb_full = np.asarray(pil)
+                crop_rgb = rgb_full[cy0:cy1, cx0:cx1]
+                crop_alpha = mask_orig[cy0:cy1, cx0:cx1]
+                rgba = np.dstack([crop_rgb, crop_alpha])
+                buf_crop = _io.BytesIO()
+                Image.fromarray(rgba, mode="RGBA").save(buf_crop, format="PNG",
+                                                        optimize=True)
+                crop_b64 = _b64.b64encode(buf_crop.getvalue()).decode("ascii")
+
+                class_name = (_COCO_NAMES[cls_id]
+                              if 0 <= cls_id < len(_COCO_NAMES)
+                              else f"class_{cls_id}")
+                instances_out.append({
+                    "instance_id": len(instances_out) + 1,
+                    "class_id": cls_id,
+                    "class_name": class_name,
+                    "confidence": round(score, 3),
+                    "bbox": bbox,
+                    "mask_png_base64": mask_b64,
+                    "crop_png_base64": crop_b64,
+                    "crop_width": cx1 - cx0,
+                    "crop_height": cy1 - cy0,
+                    "pixel_count": int((mask_orig > 0).sum()),
+                })
+            ms = round((time.perf_counter() - t) * 1000, 1)
+            return {
+                "instances": instances_out,
+                "count": len(instances_out),
+                "image_width": orig_w, "image_height": orig_h,
+                "model": "yolov8n-seg",
+                "backend": "onnx",
+                "provider": sess.get_providers()[0] if sess.get_providers() else "unknown",
+                "ms": ms,
+            }
+        except Exception as e:
+            return {"error": f"instance_segment failed: {e}",
+                    "backend": "inference-failed"}
 
     @worker.handler("video.scene_parse")
     def scene_parse(image_base64: str = "", top_k: int = 10) -> dict[str, Any]:

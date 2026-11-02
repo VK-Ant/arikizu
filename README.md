@@ -154,7 +154,7 @@ Do these in order. Don't skip. Each step takes 1-10 minutes.
 
 ```bash
 cd ~
-unzip -o arikizu-v1.9.8.zip
+unzip -o arikizu-v2.0.0.zip
 cd ~/arikizu
 ```
 

@@ -540,3 +540,10 @@ worker = "video"
 input = { image_base64 = "string", top_k = "integer" }
 output = "object"
 timeout_ms = 30000
+
+[video_instance_segment]
+name = "video.instance_segment"
+worker = "video"
+input = { image_base64 = "string", confidence = "number", iou = "number", max_detections = "integer", classes = "array" }
+output = "object"
+timeout_ms = 30000

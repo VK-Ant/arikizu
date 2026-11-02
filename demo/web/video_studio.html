@@ -224,12 +224,22 @@
         <button id="seg-src-live" class="sec">Live webcam</button>
         <span style="color:var(--muted);font-size:12px;margin-left:12px">In <b>Live webcam</b> mode the video keeps running; click on the stream to pin an object. The mask re-computes every ~2 s and follows the pin.</span>
       </div>
-      <div class="ctl" id="seg-image-controls">
-        <strong>Load image to segment:</strong>
-        <input id="seg-file" type="file" accept="image/*">
-        <button id="seg-webcam-snap" class="sec">Snap from webcam</button>
-        <button id="seg-scene-parse" class="sec">Scene Parse (indoor + outdoor, 150 classes)</button>
-        <span style="color:var(--muted);font-size:12px;margin-left:12px">Click any object OR hit Scene Parse to segment everything at once (SegFormer-B0 512x512).</span>
+      <div class="ctl" id="seg-image-controls" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <strong style="font-size:11px;letter-spacing:1px;color:var(--accent)">STEP 1 - LOAD</strong>
+          <input id="seg-file" type="file" accept="image/*">
+          <button id="seg-webcam-snap" class="sec">Snap from webcam</button>
+          <span style="color:var(--muted);font-size:12px" id="seg-load-status">no image loaded</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <strong style="font-size:11px;letter-spacing:1px;color:var(--accent)">STEP 2 - SEGMENT</strong>
+          <button id="seg-everything">Segment Everything</button>
+          <button id="seg-instance" class="sec">Objects only (YOLO)</button>
+          <button id="seg-scene-parse" class="sec">Scene only (SegFormer)</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5">
+          <strong>Segment Everything</strong> runs YOLOv8-seg (per-object: person#1, chair, laptop...) + SegFormer (every pixel: wall, floor, sky...) and merges them. <strong>Each result has a Download button</strong> in the sidebar - PNG with transparent background, cropped tight to the object. API: <code style="background:var(--card);padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:11px">POST /api/v1/call/video/instance_segment</code>
+        </div>
       </div>
       <div class="ctl" id="seg-live-controls" hidden>
         <button id="seg-live-start">Start webcam</button>
@@ -922,7 +932,9 @@ document.getElementById("seg-file").addEventListener("change", async (e) => {
       segSourceImage = img;
       drawSegBase();
       document.getElementById("seg-status").textContent =
-        `${img.naturalWidth}x${img.naturalHeight} loaded. Click an object to segment.`;
+        `ready - hit Segment Everything, or click any object for one-shot segmentation.`;
+      const ls = document.getElementById("seg-load-status");
+      if (ls) ls.innerHTML = `<span style="color:var(--pass)">loaded: ${img.naturalWidth}x${img.naturalHeight}</span>`;
     };
     img.src = reader.result;
   };
@@ -944,7 +956,9 @@ document.getElementById("seg-webcam-snap").onclick = async () => {
     segSourceImage = img;
     drawSegBase();
     document.getElementById("seg-status").textContent =
-      "snapshot captured. Click an object to segment.";
+      "snapshot captured - hit Segment Everything or click any object.";
+    const ls = document.getElementById("seg-load-status");
+    if (ls) ls.innerHTML = `<span style="color:var(--pass)">loaded: ${img.naturalWidth}x${img.naturalHeight}</span>`;
   };
   img.src = "data:image/jpeg;base64," + segSourceB64;
 };
@@ -967,6 +981,100 @@ const SEG_BACKGROUND_CLASSES = new Set([
   "sand", "field", "path",
 ]);
 let segHideBackground = false;
+
+// The default workflow button: run BOTH models in parallel and merge.
+// This is what 90% of users want - "just show me every object AND
+// every surface, cleanly." No decision fatigue.
+document.getElementById("seg-everything").onclick = async () => {
+  if (!segSourceB64) {
+    document.getElementById("seg-status").textContent = "load an image first";
+    return;
+  }
+  document.getElementById("seg-status").textContent = "running YOLOv8-seg + SegFormer in parallel...";
+  try {
+    const [yr, sr] = await Promise.all([
+      callCap("video.instance_segment", {image_base64: segSourceB64, confidence: 0.30, iou: 0.45}),
+      callCap("video.scene_parse", {image_base64: segSourceB64, top_k: 12}),
+    ]);
+    const yoloInstances = (yr.error ? [] : (yr.instances || [])).map(adaptInstanceToClass);
+    const sceneClasses = (sr.error ? [] : (sr.classes || [])).map(c => ({
+      ...c, is_scene: true, class_name: `scene:${c.class_name}`,
+    }));
+    const combined = {
+      classes: [...yoloInstances, ...sceneClasses],
+      ms: Math.max(yr.ms || 0, sr.ms || 0),
+      provider: yr.provider || sr.provider,
+      source: "combined",
+    };
+    segSceneResult = combined;
+    segIsolatedIdx = null;
+    drawSceneParse(combined, null);
+    renderClassesPanel(combined);
+    const yn = yoloInstances.length;
+    const sn = sceneClasses.length;
+    document.getElementById("seg-status").innerHTML =
+      `<b>Segment Everything</b>: ${yn} YOLO instance(s) + ${sn} scene class(es) on ${combined.provider || "cpu"}` +
+      (yr.error ? ` <span style="color:var(--fail)">· YOLO error: ${yr.error}</span>` : "") +
+      (sr.error ? ` <span style="color:var(--fail)">· SegFormer error: ${sr.error}</span>` : "");
+    document.getElementById("seg-point").textContent = "combined";
+    document.getElementById("seg-ms").textContent = combined.ms;
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "error: " + e.message;
+  }
+};
+
+// YOLO instance segmentation: no click needed, every object detected
+// gets its own mask + download.
+document.getElementById("seg-instance").onclick = async () => {
+  if (!segSourceB64) {
+    document.getElementById("seg-status").textContent = "load an image first (file or Snap from webcam)";
+    return;
+  }
+  document.getElementById("seg-status").textContent = "running YOLOv8-seg...";
+  try {
+    const r = await callCap("video.instance_segment", {
+      image_base64: segSourceB64, confidence: 0.30, iou: 0.45,
+    });
+    if (r.error) {
+      document.getElementById("seg-status").innerHTML =
+        `<span style="color:var(--fail)">instance_segment: ${r.error}</span><br>` +
+        `<span style="font-size:11px;color:var(--muted)">${r.fix_hint || ""}</span>`;
+      return;
+    }
+    segSceneResult = {classes: (r.instances || []).map(adaptInstanceToClass),
+                      provider: r.provider, ms: r.ms, source: "yolo"};
+    segIsolatedIdx = null;
+    drawSceneParse(segSceneResult, null);
+    renderClassesPanel(segSceneResult);
+    const names = (r.instances || []).map((i, idx) => `${i.class_name}#${idx+1}`).join(", ");
+    document.getElementById("seg-status").textContent =
+      `YOLOv8-seg: ${r.ms} ms on ${r.provider || "cpu"} · ${r.count} instance(s) · ${names}`;
+    document.getElementById("seg-point").textContent = "instance segment";
+    document.getElementById("seg-ms").textContent = r.ms;
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "error: " + e.message;
+  }
+};
+
+/**
+ * Adapt a YOLO instance to the same shape the renderer uses for scene
+ * parse classes, so we can reuse drawSceneParse / renderClassesPanel /
+ * downloadClass without a parallel codepath.
+ */
+function adaptInstanceToClass(inst) {
+  return {
+    class_name: `${inst.class_name}#${inst.instance_id}`,
+    class_id: inst.class_id,
+    pixel_count: inst.pixel_count,
+    fill_fraction: inst.pixel_count && segSourceImage
+      ? inst.pixel_count / (segSourceImage.naturalWidth * segSourceImage.naturalHeight)
+      : 0,
+    bbox: inst.bbox,
+    mask_png_base64: inst.mask_png_base64,
+    crop_png_base64: inst.crop_png_base64,
+    confidence: inst.confidence,
+  };
+}
 
 document.getElementById("seg-scene-parse").onclick = async () => {
   if (!segSourceB64) {
@@ -1110,29 +1218,31 @@ function highlightRow(idx) {
 async function downloadClass(idx) {
   if (!segSceneResult || !segSourceImage) return;
   const c = segSceneResult.classes[idx];
-  if (!c || !c.mask_png_base64) return;
-
-  // Load mask as image, then composite source via source-in with mask.
-  const maskImg = new Image();
-  maskImg.src = "data:image/png;base64," + c.mask_png_base64;
-  await maskImg.decode();
-
-  const W = segSourceImage.naturalWidth;
-  const H = segSourceImage.naturalHeight;
-  const canvas = document.createElement("canvas");
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext("2d");
-  // Draw mask (grayscale: 0 or 255)
-  ctx.drawImage(maskImg, 0, 0, W, H);
-  // Keep only pixels where mask is non-transparent, replace with source RGB
-  ctx.globalCompositeOperation = "source-in";
-  ctx.drawImage(segSourceImage, 0, 0, W, H);
-
-  // Export + trigger download.
-  const dataUrl = canvas.toDataURL("image/png");
+  if (!c) return;
+  const safeName = c.class_name.replace(/[^a-z0-9_-]/gi, "_");
+  let dataUrl;
+  // Prefer the server's pre-cropped RGBA PNG - tight bbox + alpha ready
+  // to use. If not present (older response), rebuild client-side.
+  if (c.crop_png_base64) {
+    dataUrl = "data:image/png;base64," + c.crop_png_base64;
+  } else if (c.mask_png_base64) {
+    const maskImg = new Image();
+    maskImg.src = "data:image/png;base64," + c.mask_png_base64;
+    await maskImg.decode();
+    const W = segSourceImage.naturalWidth;
+    const H = segSourceImage.naturalHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(maskImg, 0, 0, W, H);
+    ctx.globalCompositeOperation = "source-in";
+    ctx.drawImage(segSourceImage, 0, 0, W, H);
+    dataUrl = canvas.toDataURL("image/png");
+  } else {
+    return;
+  }
   const a = document.createElement("a");
   a.href = dataUrl;
-  const safeName = c.class_name.replace(/[^a-z0-9_-]/gi, "_");
   a.download = `arikizu_${safeName}_${c.pixel_count}px.png`;
   document.body.appendChild(a);
   a.click();
