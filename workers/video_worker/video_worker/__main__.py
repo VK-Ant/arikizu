@@ -413,34 +413,46 @@ def main() -> None:
             if cat_mask.ndim == 3:
                 cat_mask = cat_mask.squeeze(axis=-1 if cat_mask.shape[-1] == 1 else 0)
 
-            # Sample the category value AT the clicked pixel: whatever
-            # value sits under the click is the "inside" class. This
-            # replaces the old hard-coded 0/1 guess that could flip the
-            # mask inside-out and select the whole background.
+            # Figure out which class is the "object" the user clicked on.
+            # We used to just sample cat_mask[click_y, click_x], but that
+            # fails whenever the click lands on a boundary pixel or on a
+            # thin feature the model classified as background. So:
+            #   1. Vote across a 5x5 window around the click
+            #   2. If the chosen class covers MOST of the frame it is
+            #      almost certainly the background. Flip to the next-smaller
+            #      class that has at least 1% of the frame.
             mh, mw = cat_mask.shape[:2]
+            total_px = mh * mw
             px = max(0, min(mw - 1, int(round(float(x) * mw))))
             py = max(0, min(mh - 1, int(round(float(y) * mh))))
-            inside_value = int(cat_mask[py, px])
-            inside = (cat_mask == inside_value).astype(np.uint8) * 255
 
-            # Sanity guard: if the "inside" region fills > 70% of the
-            # frame it is almost certainly the background class (click
-            # landed on empty space). Flip to the smaller region, which
-            # is more likely to be the real object.
-            total_px = mh * mw
-            frac = int(inside.sum() // 255) / float(total_px)
-            if frac > 0.70:
-                # Pick the smallest non-zero category instead.
-                vals, counts = np.unique(cat_mask, return_counts=True)
-                candidates = [(int(v), int(c)) for v, c in zip(vals, counts) if int(c) < total_px * 0.70]
-                if candidates:
-                    best_val, _ = min(candidates, key=lambda vc: vc[1])
-                    inside = (cat_mask == best_val).astype(np.uint8) * 255
-                    inside_value = best_val
-                else:
-                    # Nothing distinct enough: return an empty mask with
-                    # an explanatory flag so the UI can tell the user.
-                    inside = np.zeros_like(inside)
+            # 5x5 majority vote around the click
+            y_lo, y_hi = max(0, py - 2), min(mh, py + 3)
+            x_lo, x_hi = max(0, px - 2), min(mw, px + 3)
+            neigh = cat_mask[y_lo:y_hi, x_lo:x_hi].flatten()
+            uniq_n, cnt_n = np.unique(neigh, return_counts=True)
+            inside_value = int(uniq_n[int(np.argmax(cnt_n))])
+
+            # Frame-wide class counts
+            vals, counts = np.unique(cat_mask, return_counts=True)
+            class_counts = {int(v): int(c) for v, c in zip(vals, counts)}
+            clicked_frac = class_counts.get(inside_value, 0) / float(total_px)
+
+            # If the clicked class fills more than half the frame, almost
+            # always it is the background and the object is the SMALLER
+            # class on the other side of the boundary.
+            if clicked_frac >= 0.50 and len(vals) >= 2:
+                others = [(v, c) for v, c in class_counts.items()
+                          if v != inside_value and c >= total_px * 0.01]
+                if others:
+                    others.sort(key=lambda vc: vc[1])  # smallest first
+                    inside_value = others[0][0]
+
+            inside = (cat_mask == inside_value).astype(np.uint8) * 255
+            # Final guard against runaway masks: if even the chosen class
+            # still fills >85 % of the frame, return empty with a clear flag.
+            if int(inside.sum() // 255) > total_px * 0.85:
+                inside = np.zeros_like(inside)
 
             # Compute bbox of the mask
             ys, xs = np.where(inside > 0)

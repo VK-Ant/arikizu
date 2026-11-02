@@ -1,10 +1,10 @@
 {
-  "_comment": "List YOUR custom demos here. Each entry becomes a card on /demo/. Minimum fields: title, path. Add description and capabilities for a richer card. On the next page reload the home demo index auto-discovers everything in this file. Drop a new HTML file in this folder and add its entry below.",
+  "_comment": "List YOUR OWN demos here. Each entry becomes a card under 'Your demos' on the Demos page. The one entry below ('Starter Template') is an EXAMPLE of what your card could look like. Delete it, copy demo/web/user/hello.html as a starting point for your real demo, and add YOUR entry here. Fields: title, path (required), description, capabilities, badge (optional).",
   "demos": [
     {
-      "title": "Hello Arikizu",
+      "title": "Starter Template",
       "path": "/demo/user/hello.html",
-      "description": "A one-page example that calls three capabilities and shows their output. Copy this file to start your own.",
+      "description": "The example page that shows how to call Arikizu capabilities from your own HTML. Three buttons, three capability calls, ~100 lines total. Copy demo/web/user/hello.html, rename it, and build your own app on top.",
       "capabilities": ["test.echo", "reasoning.answer", "vision.detect"],
       "badge": "example"
     }

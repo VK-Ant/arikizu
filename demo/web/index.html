@@ -86,12 +86,12 @@
   </header>
 
   <main>
-    <h2>Try the demos</h2>
+    <h2>Built-in demos <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">one card per capability area — click to open the demo page</span></h2>
     <div class="grid" id="views">
       <a class="card" href="/demo/vision_live.html">
-        <h3>Vision <span class="badge">live webcam</span></h3>
-        <p>Real-time object detection on your webcam (or the shipped fixture image). YOLOv8 inference, boxes and class labels drawn as you move.</p>
-        <span class="pill">vision.detect</span><span class="pill">vision.segment</span>
+        <h3>Live Detect <span class="badge">quick webcam</span></h3>
+        <p>Point-and-shoot object detection. Open your webcam, see YOLOv8 draw labeled boxes in real time. The simplest vision demo.</p>
+        <span class="pill">vision.detect</span>
       </a>
       <a class="card" href="/demo/audio_view.html">
         <h3>Audio <span class="badge">live mic</span></h3>
@@ -114,13 +114,13 @@
         <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
       </a>
       <a class="card" href="/demo/video_studio.html">
-        <h3>Vision <span class="badge">multimodal action</span></h3>
-        <p>Upload a clip or open your webcam. Give a text prompt or a reference image. Get a timestamped action timeline, pose, scene, boxes and masks. Runs on your device.</p>
-        <span class="pill">video.analyze_frame</span><span class="pill">video.live_detect</span><span class="pill">video.live_describe</span>
+        <h3>Vision Workbench <span class="badge">full feature</span></h3>
+        <p>The deep vision tool. Multi-person pose, action recognition, privacy blur, click-to-segment on images or live webcam, action search with text or image prompts. The full workbench, not the quick demo.</p>
+        <span class="pill">video.live_detect</span><span class="pill">video.segment_at_point</span><span class="pill">video.live_describe</span>
       </a>
       <a class="card" href="/demo/catalog.html">
-        <h3>Catalog <span class="badge">browse + try</span></h3>
-        <p>Every capability on this instance. See the input/output schema. Call any capability live from the browser with a one-click Try form. Copy a curl command to use elsewhere.</p>
+        <h3>API Explorer <span class="badge">dev tool</span></h3>
+        <p>What capabilities does this Arikizu instance have? Browse the full list, see each capability's input/output schema, click Try to call it live, Copy curl to use it from your terminal. Your reference page while building your own app.</p>
         <span class="pill">all capabilities</span>
       </a>
       <a class="card" href="/demo/agent_studio.html">
@@ -130,7 +130,7 @@
       </a>
     </div>
 
-    <h2>Your demos <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">drop an HTML in <code>demo/web/user/</code>, add it to <code>manifest.json</code>, reload</span></h2>
+    <h2>Your demos <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">your own HTML pages — drop one in <code>demo/web/user/</code>, add it to <code>manifest.json</code>, reload</span></h2>
     <div class="grid" id="user-views"></div>
 
     <h2>One-click smoke test</h2>
