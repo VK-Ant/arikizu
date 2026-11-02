@@ -1,7 +1,9 @@
 # Arikizu MCP server
 
-Exposes Arikizu capabilities to external agents (Claude Code, Cline,
-Cursor, your own agent) through the Model Context Protocol.
+Exposes Arikizu capabilities to any MCP-compatible external agent
+through the Model Context Protocol. Works with any client that speaks
+MCP over stdio; example configs for common ones are in
+`examples/mcp-configs/` at the project root.
 
 ## What this gives you
 
@@ -27,10 +29,10 @@ python3 mcp/arikizu_mcp_server.py
 
 The server speaks MCP over stdio. Hook it up to your agent host.
 
-## Wire up for Claude Code
+## Wire up to an agent
 
-Add to `.mcp.json` at the root of a project (or your global
-`~/.claude.json`):
+Add the following block to your MCP-compatible client's config file
+(the client's own docs will tell you where it lives):
 
 ```json
 {
@@ -44,11 +46,10 @@ Add to `.mcp.json` at the root of a project (or your global
 }
 ```
 
-Restart Claude Code. The Arikizu tools appear in the tools list.
+Restart the client. The Arikizu tools appear in its tools list.
 
-## Wire up for Cline / Cursor
-
-Same JSON block in Cline's settings or Cursor's MCP config.
+Ready-to-use config snippets for popular clients live in
+`examples/mcp-configs/` at the project root.
 
 ## Which capabilities are exposed
 

@@ -21,7 +21,7 @@ work? If so, say why.
 
 **Non-fit check**
 
-Against `docs/SPEC.md`:
+Against `docs/ARCHITECTURE.md`:
 
 - [ ] Multi-modal (vision + audio + docs + reasoning, not one of them)
 - [ ] Private by requirement (regulated, air-gapped, or privacy-sensitive)

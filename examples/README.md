@@ -10,9 +10,11 @@ themselves are Apache 2.0 like the rest of the project.
 examples/
 ├── agents/               Agent definitions you can import with one call
 ├── actions/              Custom action rules you can drop into video_worker
-├── mcp-configs/          .mcp.json snippets for Claude Code / Cline / Cursor
-└── demo-pages/           Minimal HTML starter you can rename and ship
+└── mcp-configs/          .mcp.json snippets for MCP-compatible agent clients
 ```
+
+A blank HTML template for new demo pages lives at
+[`../demo/web/_template.html`](../demo/web/_template.html).
 
 ---
 
@@ -59,27 +61,25 @@ single Python function + a one-line test.
 
 ## mcp-configs/
 
-MCP server config snippets for external agents:
+Config snippets for popular MCP-compatible agent clients. One file per
+client, each one a ready-to-paste `mcpServers` block. All assume
+`ARIKIZU_HTTP=http://127.0.0.1:7000`; edit the path to point at your
+Arikizu checkout.
 
-| File | For |
-|---|---|
-| `claude-code.json` | `.mcp.json` for Claude Code |
-| `cline.json` | Cline settings UI JSON |
-| `cursor.json` | Cursor MCP settings |
-
-Each file assumes `ARIKIZU_HTTP=http://127.0.0.1:7000`. Edit the path
-to point at your Arikizu checkout.
+If your client isn't listed, the shape is the standard MCP server
+block, so you can adapt any of these.
 
 ---
 
-## demo-pages/
+## demo page template
 
-A minimal HTML page template with the shared Arikizu header and a
-blank body you can fill in. Use it as a starting point for your own
-demo pages:
+A minimal HTML page with the shared Arikizu header and a blank body
+you can fill in lives at
+[`../demo/web/_template.html`](../demo/web/_template.html). Use it as
+a starting point for a new demo page:
 
 ```
-cp examples/demo-pages/blank.html demo/web/my_demo.html
+cp demo/web/_template.html demo/web/my_demo.html
 # edit, open http://127.0.0.1:7000/demo/my_demo.html
 ```
 
@@ -87,7 +87,7 @@ cp examples/demo-pages/blank.html demo/web/my_demo.html
 
 ## Customize deeper
 
-The full customization guide is at [`../docs/CUSTOMIZE.md`](../docs/CUSTOMIZE.md).
+The full customization guide is at [`../docs/AGENTS.md`](../docs/AGENTS.md).
 Seven recipes with concrete code:
 
 1. Swap a model
@@ -102,8 +102,8 @@ Seven recipes with concrete code:
 Plus the agent + MCP + governance docs:
 
 - [`../docs/AGENTS.md`](../docs/AGENTS.md): build custom agents
-- [`../docs/MCP.md`](../docs/MCP.md): expose Arikizu to external agents
-- [`../docs/GOVERNANCE.md`](../docs/GOVERNANCE.md): the Responsible AI story
+- [`../docs/AGENTS.md`](../docs/AGENTS.md): expose Arikizu to external agents
+- [`../docs/AGENTS.md`](../docs/AGENTS.md): the Responsible AI story
 
 ---
 

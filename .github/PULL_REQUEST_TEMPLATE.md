@@ -28,7 +28,7 @@ Issue number, or short rationale.
 
 - [ ] README / docs updated if behavior visible to users changed
 - [ ] Capability added to `capabilities.toml` if a new worker handler
-- [ ] Added entry to `docs/MODULES.md` if a new module
+- [ ] Added entry to `docs/ARCHITECTURE.md` if a new module
 
 ## Breaking change?
 

@@ -144,7 +144,7 @@ workers:
     cwd: ./workers
 ```
 
-Pi 5 (8 GB) or Jetson: keep all workers, but still skip `reasoning` unless a local LLM runtime is running on the Pi (which is slow: see `docs/MODEL_STRATEGY.md`).
+Pi 5 (8 GB) or Jetson: keep all workers, but still skip `reasoning` unless a local LLM runtime is running on the Pi (which is slow: see `docs/SETUP.md`).
 
 ### A.8  Build
 
@@ -212,14 +212,14 @@ If `arikizu-dev.local` doesn't resolve on Windows, use the Pi's IP: run
 
 ### A.11  Walk through the demos
 
-See [`docs/DEMO.md`](docs/DEMO.md) for a click-by-click guide to every
+See [`docs/DEMOS.md`](docs/DEMOS.md) for a click-by-click guide to every
 view. Vision live, audio waveform + VAD, document extraction, time-series
 forecasting, reasoning chat, memory recall, PII scan, eval scoring.
 
 ### A.12  Real vision project (optional, highly recommended)
 
 With the runtime up and a Pi Camera attached, see
-[`docs/PI_VISION_TUTORIAL.md`](docs/PI_VISION_TUTORIAL.md) for a 1-hour
+[`docs/DEMOS.md`](docs/DEMOS.md) for a 1-hour
 end-to-end project: Pi Camera to the vision model to annotated detections to
 dashboard to approval gate.
 
@@ -300,7 +300,7 @@ Promotable when:
 - [x] `make smoke` shows 0 FAIL
 - [x] Operator dashboard renders at `http://<host>:7000/`
 - [x] Developer sandbox renders at `http://<host>:7000/demo/`
-- [x] One demo view (any one from [`docs/DEMO.md`](docs/DEMO.md)) returns real data
+- [x] One demo view (any one from [`docs/DEMOS.md`](docs/DEMOS.md)) returns real data
 
 That's the baseline. Everything else is iteration from there.
 

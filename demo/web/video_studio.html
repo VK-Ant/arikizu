@@ -186,8 +186,11 @@
         <span style="margin-left:16px">VLM cadence</span>
         <select id="cam-vlm-cadence"><option value="0">off</option><option value="3">every 3 s</option><option value="5" selected>every 5 s</option></select>
         <label style="margin-left:16px"><input type="checkbox" id="cam-blur" checked> privacy blur</label>
-        <label style="margin-left:16px"><input type="checkbox" id="cam-pin-mode"> click-to-segment (pin mode)</label>
+        <label style="margin-left:16px;color:var(--accent);font-weight:600"><input type="checkbox" id="cam-pin-mode"> Live click-to-segment</label>
         <span id="cam-pin-status" style="margin-left:12px;color:var(--muted)"></span>
+      </div>
+      <div id="cam-pin-banner" hidden style="padding:8px 12px;background:rgba(255,107,26,0.12);border-left:3px solid var(--accent);color:var(--fg);font-size:13px;margin:4px 0">
+        Pin mode is ON. <strong>Click any object on the live feed</strong> to segment it. The mask re-computes every ~2 seconds and follows the pin.
       </div>
       <div class="stage">
         <div class="stage-grid">
@@ -607,15 +610,18 @@ camOverlay.addEventListener("click", (e) => {
 });
 
 document.getElementById("cam-pin-mode").addEventListener("change", (e) => {
+  const banner = document.getElementById("cam-pin-banner");
   if (!e.target.checked) {
     camPin = null;
     camLastMask = null;
     document.getElementById("cam-pin-status").textContent = "";
     camOverlay.classList.remove("click");
+    if (banner) banner.hidden = true;
   } else {
     camOverlay.classList.add("click");
     document.getElementById("cam-pin-status").textContent =
       "click an object on the live feed";
+    if (banner) banner.hidden = false;
   }
 });
 
@@ -673,6 +679,8 @@ async function startCam() {
       const b64 = c.toDataURL("image/jpeg", 0.6).split(",")[1];
       try {
         const r = await callCap("video.live_detect", {image_base64: b64});
+        // Stop was pressed while this await was in flight: bail.
+        if (!camStream) return;
         // If MediaPipe isn't installed, say so in the status line IMMEDIATELY
         // every tick. Loud is better than hidden.
         // If perception stack failed for any reason, show the specific error
@@ -712,12 +720,22 @@ async function startCam() {
             callCap("video.segment_at_point", {
               image_base64: b64, x: camPin.x, y: camPin.y,
             }).then(sr => {
-              if (!sr.error && sr.mask_png_base64) {
-                camLastMask = {mask: sr.mask_png_base64, bbox: sr.bbox};
-                document.getElementById("cam-pin-status").textContent =
-                  `pinned object: ${sr.mask_pixel_count} px, ${sr.ms} ms`;
+              const ps = document.getElementById("cam-pin-status");
+              if (sr.error) {
+                ps.innerHTML = `<span style="color:var(--fail)">segment error: ${sr.error}</span>`;
+                return;
               }
-            }).catch(() => {});
+              if (sr.mask_png_base64) {
+                camLastMask = {mask: sr.mask_png_base64, bbox: sr.bbox};
+                ps.textContent =
+                  `pinned object: ${sr.mask_pixel_count || 0} px · ${sr.ms || 0} ms`;
+              } else {
+                ps.innerHTML = `<span style="color:var(--muted)">no segment at that point — try another spot</span>`;
+              }
+            }).catch(err => {
+              const ps = document.getElementById("cam-pin-status");
+              if (ps) ps.innerHTML = `<span style="color:var(--fail)">segment call failed: ${err.message}</span>`;
+            });
           }
           // Draw the pin dot on top so the user knows where they clicked
           ctx.fillStyle = "#ff6b1a";
@@ -765,11 +783,40 @@ async function startCam() {
 }
 
 function stopCam() {
+  // Order matters: null out camStream FIRST so any in-flight tick
+  // bails on the `if (!camStream) return` guard before writing to the DOM.
+  const stream = camStream;
+  camStream = null;
   if (camTimer) { clearInterval(camTimer); camTimer = null; }
-  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  if (stream) { try { stream.getTracks().forEach(t => t.stop()); } catch (e) {} }
+  // Detach the video element so the browser releases the camera indicator.
+  const camVid = document.getElementById("cam-vid");
+  try { camVid.srcObject = null; camVid.pause(); } catch (e) {}
+  // Clear the overlay so the last drawn frame doesn't look like a live feed.
+  const ov = document.getElementById("cam-overlay");
+  if (ov) {
+    const ctx = ov.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, ov.width, ov.height);
+  }
+  // Reset pin state and live mask cache.
+  camPin = null;
+  camLastMask = null;
+  camLastSegT = 0;
+  const pm = document.getElementById("cam-pin-mode");
+  if (pm) pm.checked = false;
+  const ps = document.getElementById("cam-pin-status");
+  if (ps) ps.textContent = "";
+  const banner = document.getElementById("cam-pin-banner");
+  if (banner) banner.hidden = true;
+  if (camOverlay) camOverlay.classList.remove("click");
   document.getElementById("cam-stop").disabled = true;
   document.getElementById("cam-start").disabled = false;
   document.getElementById("cam-status").textContent = "idle";
+  document.getElementById("cam-status").style.color = "var(--muted)";
+  // Reset live HUD so it doesn't show stale numbers.
+  document.getElementById("cam-action").textContent = "—";
+  document.getElementById("cam-conf").textContent = "—";
+  document.getElementById("cam-fps-actual").textContent = "0";
 }
 
 document.getElementById("cam-start").onclick = startCam;

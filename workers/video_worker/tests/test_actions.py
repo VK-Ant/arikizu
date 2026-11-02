@@ -139,8 +139,64 @@ def test_unknown_floor():
     assert r["action"] == "unknown"
 
 
+def test_head_down():
+    """Webcam close-up: lower body not visible; nose dropped below shoulders."""
+    lm = _landmarks_zero()
+    lm[0] = (0.5, 0.5, 0.0)
+    lm[11] = (0.4, 0.4, 0.0)
+    lm[12] = (0.6, 0.4, 0.0)
+    vis = [1.0] * 33
+    for i in (23, 24, 25, 26, 27, 28):
+        vis[i] = 0.1
+    r = recognize(PoseFrame(lm, vis))
+    assert r["action"] == "head_down"
+
+
+def test_leaning_back():
+    """Shoulders modestly offset back from hips (reclined, not bent forward)."""
+    lm = _landmarks_zero()
+    lm[0] = (0.5, 0.2, 0.0)
+    lm[11] = (0.32, 0.35, 0.0)   # left shoulder shifted left
+    lm[12] = (0.52, 0.35, 0.0)   # right shoulder shifted left
+    lm[23] = (0.45, 0.6, 0.0)    # left hip
+    lm[24] = (0.65, 0.6, 0.0)    # right hip
+    vis = [1.0] * 33
+    for i in (27, 28):
+        vis[i] = 0.1
+    r = recognize(PoseFrame(lm, vis))
+    assert r["action"] == "leaning_back"
+
+
+def test_typing():
+    """Upper body visible, both wrists close together at waist, elbows bent."""
+    lm = _landmarks_zero()
+    lm[0] = (0.5, 0.2, 0.0)
+    lm[11] = (0.4, 0.4, 0.0); lm[12] = (0.6, 0.4, 0.0)   # shoulders
+    lm[13] = (0.4, 0.55, 0.0); lm[14] = (0.6, 0.55, 0.0) # elbows bent
+    lm[15] = (0.48, 0.65, 0.0); lm[16] = (0.52, 0.65, 0.0) # wrists very close
+    vis = [1.0] * 33
+    for i in (23, 24, 25, 26, 27, 28):
+        vis[i] = 0.1
+    r = recognize(PoseFrame(lm, vis))
+    assert r["action"] == "typing"
+
+
+def test_resting_upper_body():
+    """Upper body visible, arms hanging down, head upright: a weak 'resting' signal."""
+    lm = _landmarks_zero()
+    lm[0] = (0.5, 0.2, 0.0)              # nose up high
+    lm[11] = (0.4, 0.4, 0.0); lm[12] = (0.6, 0.4, 0.0)   # shoulders
+    lm[15] = (0.4, 0.7, 0.0); lm[16] = (0.6, 0.7, 0.0)   # wrists hanging below shoulders
+    # No hip / knee / ankle visible -> full-body rules can't fire
+    vis = [1.0] * 33
+    for i in (23, 24, 25, 26, 27, 28):
+        vis[i] = 0.1   # low visibility: full-body rules skip them
+    r = recognize(PoseFrame(lm, vis))
+    assert r["action"] == "resting"
+
+
 def test_actions_known_registry():
     from video_worker.actions import ACTIONS_KNOWN, action_definitions
     defs = {d["name"] for d in action_definitions()}
     assert set(ACTIONS_KNOWN) == defs
-    assert len(ACTIONS_KNOWN) == 12
+    assert len(ACTIONS_KNOWN) == 16

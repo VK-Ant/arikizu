@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Arikizu MCP server.
 
-Exposes Arikizu capabilities as Model Context Protocol tools so external
-agents (Claude Code, Cline, Cursor, your own agent) can call them.
+Exposes Arikizu capabilities as Model Context Protocol tools so any
+MCP-compatible external agent can call them.
 
 Protocol: MCP over stdio. Discoverable: `python3 arikizu_mcp_server.py`
-and the host wires it to your agent.
+and the host wires it into its agent framework.
 
 Governance: every tool call is forwarded to the Arikizu HTTP router
 (same surface as the browser), so audit logging + policy enforcement +
 approval queue all apply. The MCP server is a thin adapter, not a
 bypass.
 
-Install for Claude Code (user) by adding to .mcp.json / claude-code
-config:
+Install: add an entry under `mcpServers` in your agent's MCP config
+pointing at this file. Example configs for common clients are in
+examples/mcp-configs/ at the project root.
+
+Config shape:
 
     {
       "mcpServers": {

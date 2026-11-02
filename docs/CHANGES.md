@@ -134,7 +134,7 @@ MCP stdio server that exposes a safe subset of 17 Arikizu capabilities
 to external agents (Claude Code, Cline, Cursor, your own framework).
 Every call forwards through the Arikizu HTTP router so policy + audit
 + approval queue all apply. The MCP server is a thin adapter, not a
-bypass. Install guide in `docs/MCP.md`.
+bypass. Install guide in `docs/AGENTS.md`.
 
 **New: demo/web/agent_studio.html** (~380 lines)
 
@@ -149,10 +149,10 @@ decision badge, and the result preview.
 - `docs/AGENTS.md` — custom agent architecture, policy explanation,
   tool-call protocol, Agent Studio walkthrough, pointer to MCP for
   external agents
-- `docs/MCP.md` — install, wire-up for Claude Code / Cline / Cursor,
+- `docs/AGENTS.md` — install, wire-up for Claude Code / Cline / Cursor,
   which capabilities are exposed, governance across the boundary,
   troubleshooting
-- `docs/GOVERNANCE.md` — the Responsible-AI-by-architecture story:
+- `docs/AGENTS.md` — the Responsible-AI-by-architecture story:
   four claims, per-entry-point governance table, hard-deny list, how
   the audit log looks as SQL queries, how it compares to cloud-API
   governance
@@ -202,10 +202,10 @@ exist. Fixed in one pass:
   the "eleven workers" wording in the opening paragraph; replaced the
   stale `assets/architecture.png` reference with the new SVG that was
   already rendered for the main README.
-- `docs/MODELS.md`: appended a Video Studio models table listing all
+- `docs/SETUP.md`: appended a Video Studio models table listing all
   eight model files (perception + VLM) with sizes, formats, delegate
   recommendations, and the download command.
-- `docs/DEMO.md`: new section 10 "Video Studio: multimodal action
+- `docs/DEMOS.md`: new section 10 "Video Studio: multimodal action
   search" with click-by-click walkthrough including the reference-image
   flow for open-vocabulary actions; "What to show someone else" updated
   to lead with Video Studio instead of basic vision.
@@ -295,10 +295,10 @@ sync.
 - README.md: Mermaid architecture diagram now shows the Video Studio
   worker as a highlighted node with its four internal sub-components
   (Perception, Action, Scene, VLM) visible
-- docs/CUSTOMIZE.md: new section 8 "Customize the Video Studio" with
+- docs/AGENTS.md: new section 8 "Customize the Video Studio" with
   recipes for adding an action, swapping the VLM, adding a device
   profile, bringing your own perception backend
-- docs/VIDEO_STUDIO_TEST.md: seven-step test plan from unit tests
+- docs/DEMOS.md: seven-step test plan from unit tests
   through hardware benchmark through end-to-end browser walkthrough
 - docs/assets/architecture-glance.svg: re-rendered (217 KB)
 - scripts/doctor.sh: new rows for the three main MediaPipe/SegFormer
@@ -344,7 +344,7 @@ Mermaid flowchart that GitHub renders natively.
 
 Scattered mentions of "how to swap a model" or "how to add a worker"
 across ARCHITECTURE.md, MODELS.md, HOW_IT_RUNS.md, but no one page
-anyone would land on. Added `docs/CUSTOMIZE.md` as the single
+anyone would land on. Added `docs/AGENTS.md` as the single
 customization reference. Seven recipes, each one or two file edits:
 
 1. Swap a model (drop into models/ or set an env var)

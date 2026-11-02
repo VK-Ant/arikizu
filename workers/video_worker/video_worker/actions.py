@@ -248,12 +248,94 @@ def is_pointing(pose: PoseFrame) -> tuple[float, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Upper-body-only rules: for the common case where the camera only sees
+# the torso + head (person sitting at a desk, close-up webcam, etc).
+# ---------------------------------------------------------------------------
+
+def is_head_down(pose: PoseFrame) -> tuple[float, dict]:
+    """Nose much lower than shoulders (looking down, reading, dozing)."""
+    if not pose.ok(NOSE, L_SHOULDER, R_SHOULDER):
+        return 0.0, {}
+    nose_y = pose.xy(NOSE)[1]
+    sh_y = (pose.xy(L_SHOULDER)[1] + pose.xy(R_SHOULDER)[1]) / 2
+    # Normally nose is well above shoulders (lower y). If nose has dropped
+    # noticeably below the shoulder line, head is down.
+    if nose_y > sh_y + 0.03:
+        return 0.65, {"nose_y": round(nose_y, 3), "shoulder_y": round(sh_y, 3)}
+    return 0.0, {}
+
+
+def is_leaning_back(pose: PoseFrame) -> tuple[float, dict]:
+    """Shoulders behind hips in horizontal distance (torso tilted back)."""
+    if not pose.ok(L_SHOULDER, R_SHOULDER, L_HIP, R_HIP):
+        return 0.0, {}
+    sh_x = (pose.xy(L_SHOULDER)[0] + pose.xy(R_SHOULDER)[0]) / 2
+    hp_x = (pose.xy(L_HIP)[0] + pose.xy(R_HIP)[0]) / 2
+    sh_y = (pose.xy(L_SHOULDER)[1] + pose.xy(R_SHOULDER)[1]) / 2
+    hp_y = (pose.xy(L_HIP)[1] + pose.xy(R_HIP)[1]) / 2
+    # Negligible vertical difference: not leaning
+    dy = hp_y - sh_y
+    if dy < 0.05:
+        return 0.0, {}
+    dx = abs(sh_x - hp_x)
+    # Noticeable horizontal offset AND still upright-ish
+    if dx / dy > 0.35 and dx / dy < 0.9:
+        return 0.60, {"dx": round(dx, 3), "dy": round(dy, 3)}
+    return 0.0, {}
+
+
+def is_typing(pose: PoseFrame) -> tuple[float, dict]:
+    """Both wrists near each other at waist height, elbows bent sharply.
+    A classic 'hands on keyboard' posture."""
+    if not pose.ok(L_WRIST, R_WRIST, L_SHOULDER, R_SHOULDER, L_ELBOW, R_ELBOW):
+        return 0.0, {}
+    lw = pose.xy(L_WRIST); rw = pose.xy(R_WRIST)
+    sh_y = (pose.xy(L_SHOULDER)[1] + pose.xy(R_SHOULDER)[1]) / 2
+    # Wrists below shoulders (not up in the air)
+    if lw[1] < sh_y + 0.08 or rw[1] < sh_y + 0.08:
+        return 0.0, {}
+    # Wrists close horizontally (keyboard width, not arms-wide).
+    # Shoulder-width is a natural upper bound.
+    wrist_gap = abs(lw[0] - rw[0])
+    shoulder_gap = abs(pose.xy(L_SHOULDER)[0] - pose.xy(R_SHOULDER)[0]) or 0.001
+    if wrist_gap > shoulder_gap * 0.9:
+        return 0.0, {}
+    # Elbows bent
+    l_angle = _angle(pose.xy(L_SHOULDER), pose.xy(L_ELBOW), lw)
+    r_angle = _angle(pose.xy(R_SHOULDER), pose.xy(R_ELBOW), rw)
+    if l_angle < 150 and r_angle < 150:
+        return 0.70, {"wrist_gap": round(wrist_gap, 3),
+                      "l_elbow": round(l_angle, 1), "r_elbow": round(r_angle, 1)}
+    return 0.0, {}
+
+
+def is_resting(pose: PoseFrame) -> tuple[float, dict]:
+    """Shoulders horizontal, arms hanging / resting below shoulders, no gesture."""
+    if not pose.ok(L_SHOULDER, R_SHOULDER, L_WRIST, R_WRIST, NOSE):
+        return 0.0, {}
+    sh_y = (pose.xy(L_SHOULDER)[1] + pose.xy(R_SHOULDER)[1]) / 2
+    nose_y = pose.xy(NOSE)[1]
+    # Head upright
+    if nose_y > sh_y - 0.05:
+        return 0.0, {}
+    # Both wrists below shoulders
+    if pose.xy(L_WRIST)[1] < sh_y or pose.xy(R_WRIST)[1] < sh_y:
+        return 0.0, {}
+    # Base-posture class with LOW confidence so specific gestures win when
+    # they fire. Returns a signal when upper body is visible and still.
+    return 0.45, {}
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher: run every rule, pick the strongest.
 # ---------------------------------------------------------------------------
 
 ACTIONS_KNOWN = [
+    # Full-body
     "standing", "sitting", "walking", "running", "waving", "kicking",
     "jumping", "hands_up", "arms_crossed", "bending", "falling", "pointing",
+    # Upper-body-only (desk / webcam close-up)
+    "head_down", "leaning_back", "typing", "resting",
 ]
 
 
@@ -280,6 +362,11 @@ def recognize(pose: PoseFrame,
         "bending": is_bending(pose),
         "falling": is_falling(pose, hip_dy),
         "pointing": is_pointing(pose),
+        # Upper-body-only rules
+        "head_down": is_head_down(pose),
+        "leaning_back": is_leaning_back(pose),
+        "typing": is_typing(pose),
+        "resting": is_resting(pose),
     }
     # Running overrides walking at high motion. Falling overrides sitting
     # if both fire. Hands_up overrides waving (frozen trumps motion).
@@ -290,13 +377,21 @@ def recognize(pose: PoseFrame,
     if scores["hands_up"][0] > 0.7:
         scores["waving"] = (0.0, {})
     # Gestures override base posture: if we can see someone pointing or
-    # waving, that is a more useful label than "standing". Base-posture
-    # labels only win when nothing more specific fired.
+    # waving, that is a more useful label than "standing" or "resting".
     gesture_conf = max(scores["pointing"][0], scores["waving"][0],
                        scores["hands_up"][0], scores["arms_crossed"][0],
                        scores["kicking"][0])
     if gesture_conf >= CONFIDENCE_FLOOR:
         scores["standing"] = (0.0, {})
+        scores["resting"] = (0.0, {})
+    # Typing beats arms_crossed when the hands are clearly on a keyboard
+    # (close together, elbows bent). This matches the common webcam/desk case.
+    if scores["typing"][0] > 0.65 and scores["arms_crossed"][0] < 0.80:
+        scores["arms_crossed"] = (0.0, {})
+    # arms_crossed needs STRONGER evidence than before, because a bad
+    # pose read with wrists at mid-body can fire it accidentally.
+    if scores["arms_crossed"][0] > 0 and scores["arms_crossed"][0] < 0.72:
+        scores["arms_crossed"] = (0.0, {})
 
     best = max(scores.items(), key=lambda kv: kv[1][0])
     name, (conf, evidence) = best
@@ -331,4 +426,8 @@ def action_definitions() -> list[dict[str, str]]:
         {"name": "bending", "definition": "Torso bent forward: horizontal shoulder-hip offset exceeds vertical."},
         {"name": "falling", "definition": "Rapid downward motion with hip below knee (collapsed)."},
         {"name": "pointing", "definition": "One arm extended straight, the other at rest."},
+        {"name": "head_down", "definition": "Nose dropped below shoulder line (looking down, reading, dozing)."},
+        {"name": "leaning_back", "definition": "Shoulders behind hips horizontally (reclined posture)."},
+        {"name": "typing", "definition": "Both wrists close together at waist height with bent elbows (keyboard posture)."},
+        {"name": "resting", "definition": "Upper body visible, arms down, head upright, no gesture."},
     ]

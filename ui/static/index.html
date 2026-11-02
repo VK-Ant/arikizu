@@ -8,20 +8,22 @@
   <title>Arikizu</title>
   <style>
     :root {
-      --bg: #0e1626;
-      --surface: #1a2740;
-      --surface-2: #243458;
-      --card: #1e2b47;
-      --fg: #e8ecf5;
-      --muted: #8a98b4;
-      --dim: #5a6a8a;
-      --border: #2b3a5c;
-      --accent: #ff8c3b;
-      --accent-glow: #ff7f33;
-      --ok: #4ade80;
-      --warn: #f59e0b;
-      --fail: #ef4444;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --card: #141414;
+      --card-2: #1a1a1a;
+      --fg: #ffffff;
+      --muted: #8a8a8a;
+      --dim: #555555;
+      --border: #262626;
+      --border-2: #333333;
+      --accent: #ff6b1a;
+      --accent-soft: rgba(255,107,26,0.12);
+      --accent-glow: rgba(255,107,26,0.35);
+      --ok: #ff6b1a;
+      --warn: #ffb15a;
+      --fail: #c53d3d;
+      --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
       --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       color-scheme: dark;
     }
@@ -31,152 +33,198 @@
       font-size: 14px; line-height: 1.5; height: 100%;
       -webkit-font-smoothing: antialiased;
     }
+    a { color: inherit; text-decoration: none; }
 
     /* Layout */
     .app { display: flex; min-height: 100vh; }
     .sidebar {
-      width: 200px; background: var(--surface); border-right: 1px solid var(--border);
+      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; flex-shrink: 0;
     }
     .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .topbar {
-      padding: 20px 32px; border-bottom: 1px solid var(--border);
+      padding: 18px 36px; border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
       background: var(--bg);
     }
-    .content { padding: 32px; overflow-y: auto; }
+    .content { padding: 40px 36px 60px; overflow-y: auto; max-width: 1400px; }
 
     /* Brand */
     .brand {
-      padding: 20px 20px 24px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
+      padding: 22px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
     }
     .brand-mark {
-      width: 40px; height: 40px; display: flex;
-      align-items: center; justify-content: center;
-      filter: drop-shadow(0 2px 8px rgba(255,140,59,0.35));
+      width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
+      background: var(--card); border: 1px solid var(--border-2); border-radius: 10px;
+      overflow: hidden;
     }
     .brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-    .brand-text .name { font-weight: 700; font-size: 15px; letter-spacing: 0.5px; }
-    .brand-text .tag { font-size: 10px; color: var(--accent); letter-spacing: 2px; font-weight: 600; }
+    .brand-text .name { font-weight: 800; font-size: 16px; letter-spacing: 1px; }
+    .brand-text .tag {
+      font-size: 10px; color: var(--accent); letter-spacing: 3px; font-weight: 700;
+      margin-top: 3px;
+    }
 
     /* Nav */
-    nav { padding: 16px 0; flex: 1; }
+    nav { padding: 14px 0; flex: 1; }
+    .nav-group {
+      padding: 10px 20px 6px; font-size: 10px; letter-spacing: 2px;
+      color: var(--dim); text-transform: uppercase; font-weight: 700;
+    }
     .nav-item {
       display: flex; align-items: center; gap: 12px;
-      padding: 11px 20px; color: var(--muted); text-decoration: none;
-      font-size: 14px; border-left: 3px solid transparent; cursor: pointer;
+      padding: 10px 20px; color: var(--muted);
+      font-size: 14px; border-left: 2px solid transparent; cursor: pointer;
+      transition: color 0.1s, background 0.1s;
     }
     .nav-item:hover { color: var(--fg); background: rgba(255,255,255,0.02); }
     .nav-item.active {
-      color: var(--fg); background: rgba(255,140,59,0.1);
+      color: var(--fg); background: var(--accent-soft);
       border-left-color: var(--accent);
     }
-    .nav-item svg { width: 18px; height: 18px; opacity: 0.9; flex-shrink: 0; }
+    .nav-item.active svg { color: var(--accent); }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.9; }
 
     /* Topbar chips */
-    .chips { display: flex; align-items: center; gap: 14px; }
+    .chips { display: flex; align-items: center; gap: 10px; }
     .chip {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 14px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 999px; font-size: 13px; color: var(--muted);
+      padding: 6px 14px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 999px; font-size: 12px; color: var(--fg); font-weight: 500;
     }
     .chip .dot {
-      width: 8px; height: 8px; border-radius: 50%; background: var(--ok);
-      box-shadow: 0 0 8px rgba(74,222,128,0.6);
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
     }
-    .chip .dot.off { background: var(--fail); box-shadow: 0 0 8px rgba(239,68,68,0.5); }
-    .chip-device svg { width: 16px; height: 16px; color: #c53d3d; }
+    .chip .dot.off { background: var(--fail); box-shadow: 0 0 8px rgba(197,61,61,0.6); }
+    .chip svg { width: 14px; height: 14px; color: var(--accent); }
 
     /* Greeting */
+    .greeting { margin-bottom: 32px; }
     .greeting h1 {
-      font-size: 32px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.01em;
+      font-size: 36px; font-weight: 800; margin-bottom: 8px;
+      letter-spacing: -0.02em; line-height: 1.1;
     }
+    .greeting h1 .accent { color: var(--accent); }
     .greeting p { color: var(--muted); font-size: 15px; }
 
     /* Capability grid */
+    .section-title {
+      font-size: 11px; letter-spacing: 2px; color: var(--dim);
+      font-weight: 700; text-transform: uppercase; margin-bottom: 14px;
+    }
     .cap-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px; margin-top: 28px;
+      gap: 14px; margin-bottom: 40px;
     }
     .cap {
-      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-      padding: 20px; text-decoration: none; color: inherit; cursor: pointer;
-      transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
-      display: flex; flex-direction: column; gap: 12px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 22px; cursor: pointer; position: relative; overflow: hidden;
+      transition: transform 0.15s, border-color 0.15s, background 0.15s;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .cap::after {
+      content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px;
+      background: radial-gradient(circle at top right, var(--accent-glow), transparent 70%);
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none;
     }
     .cap:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent); box-shadow: 0 8px 24px rgba(255,140,59,0.12);
+      transform: translateY(-2px); background: var(--card-2);
+      border-color: var(--accent);
     }
+    .cap:hover::after { opacity: 1; }
+    .cap:hover .cap-arrow { color: var(--accent); transform: translateX(2px); }
     .cap-icon {
-      width: 48px; height: 48px; border-radius: 12px;
+      width: 44px; height: 44px; border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid rgba(255,107,26,0.25);
     }
-    .cap-icon svg { width: 24px; height: 24px; }
-    .cap-icon.vision     { background: rgba(96,165,250,0.15); color: #60a5fa; }
-    .cap-icon.docs       { background: rgba(74,222,128,0.15); color: var(--ok); }
-    .cap-icon.audio      { background: rgba(192,132,252,0.15); color: #c084fc; }
-    .cap-icon.reasoning  { background: rgba(255,140,59,0.15); color: var(--accent); }
-    .cap-icon.analytics  { background: rgba(45,212,191,0.15); color: #2dd4bf; }
-    .cap-icon.more       { background: rgba(251,146,60,0.15); color: #fb923c; }
-    .cap h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-    .cap p { font-size: 13px; color: var(--muted); }
+    .cap-icon svg { width: 22px; height: 22px; }
+    .cap-head { display: flex; align-items: start; justify-content: space-between; }
+    .cap-arrow {
+      color: var(--dim); transition: color 0.15s, transform 0.15s;
+    }
+    .cap-arrow svg { width: 18px; height: 18px; }
+    .cap h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.005em; }
+    .cap p { font-size: 13px; color: var(--muted); line-height: 1.4; }
 
     /* Lower section */
     .lower {
-      display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-top: 32px;
+      display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px;
     }
     @media (max-width: 900px) { .lower { grid-template-columns: 1fr; } }
 
     .panel {
-      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-      padding: 20px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 22px 24px;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
     }
     .panel-title {
-      font-size: 15px; font-weight: 600; margin-bottom: 14px;
+      font-size: 15px; font-weight: 700; letter-spacing: -0.005em;
     }
-    .activity-row, .status-row {
-      display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    .panel-badge {
+      font-size: 10px; letter-spacing: 2px; color: var(--accent);
+      font-weight: 700; text-transform: uppercase;
+    }
+
+    .activity-row {
+      display: flex; align-items: center; gap: 14px; padding: 12px 0;
       border-bottom: 1px solid var(--border);
     }
-    .activity-row:last-child, .status-row:last-child { border-bottom: none; }
+    .activity-row:last-child { border-bottom: none; }
     .activity-icon {
-      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-      background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+      background: var(--accent-soft); border: 1px solid rgba(255,107,26,0.2);
+      display: flex; align-items: center; justify-content: center; color: var(--accent);
     }
-    .activity-icon svg { width: 16px; height: 16px; color: var(--accent); }
+    .activity-icon svg { width: 15px; height: 15px; }
     .activity-text { flex: 1; min-width: 0; }
     .activity-text .label {
-      font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 14px; font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .activity-text .meta { font-size: 11px; color: var(--dim); margin-top: 2px; }
-    .activity-time { font-size: 12px; color: var(--muted); white-space: nowrap; }
-    .status-row { gap: 14px; }
-    .status-icon {
-      width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2);
-      display: flex; align-items: center; justify-content: center;
+    .activity-text .meta {
+      font-size: 11px; color: var(--muted); margin-top: 2px;
+      font-family: var(--mono);
     }
-    .status-icon svg { width: 16px; height: 16px; color: var(--muted); }
+    .activity-time {
+      font-size: 11px; color: var(--muted); white-space: nowrap;
+      font-family: var(--mono);
+    }
+
+    .status-row {
+      display: flex; align-items: center; gap: 14px; padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-row:last-child { border-bottom: none; }
     .status-label { flex: 1; font-size: 14px; color: var(--muted); }
-    .status-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
+    .status-value {
+      font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: var(--fg); letter-spacing: -0.01em;
+    }
     .status-dot {
       width: 10px; height: 10px; border-radius: 50%;
-      background: var(--ok); box-shadow: 0 0 6px rgba(74,222,128,0.5);
+      background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);
     }
-    .status-dot.warn { background: var(--warn); box-shadow: 0 0 6px rgba(245,158,11,0.5); }
-    .status-dot.fail { background: var(--fail); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    .status-dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(255,177,90,0.5); }
+    .status-dot.fail { background: var(--fail); box-shadow: 0 0 8px rgba(197,61,61,0.5); }
 
     /* Small screens */
     @media (max-width: 700px) {
-      .sidebar { width: 60px; }
-      .brand-text, .nav-item span { display: none; }
+      .sidebar { width: 64px; }
+      .brand-text, .nav-item span, .nav-group { display: none; }
       .brand { justify-content: center; padding: 20px 10px; }
       .nav-item { justify-content: center; padding: 11px; }
-      .topbar { padding: 16px 20px; }
-      .content { padding: 20px; }
-      .greeting h1 { font-size: 24px; }
+      .topbar { padding: 14px 20px; }
+      .content { padding: 24px 20px 40px; }
+      .greeting h1 { font-size: 26px; }
     }
   </style>
 </head>
@@ -191,16 +239,17 @@
         </div>
       </div>
       <nav>
+        <div class="nav-group">Dashboard</div>
         <a class="nav-item active" href="/">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 12l9-9 9 9M5 10v10h14V10"/>
           </svg>
           <span>Home</span>
         </a>
+        <div class="nav-group">Capabilities</div>
         <a class="nav-item" href="/demo/reasoning_chat.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="4"/>
-            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>
+            <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
           </svg>
           <span>AI Assistant</span>
         </a>
@@ -221,7 +270,7 @@
         <a class="nav-item" href="/demo/docs_view.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+            <path d="M14 2v6h6M16 13H8M16 17H8"/>
           </svg>
           <span>Documents</span>
         </a>
@@ -231,6 +280,14 @@
           </svg>
           <span>Time Series</span>
         </a>
+        <a class="nav-item" href="/demo/video_studio.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="6" width="14" height="12" rx="2"/>
+            <path d="M22 8l-6 4 6 4V8z"/>
+          </svg>
+          <span>Video Studio</span>
+        </a>
+        <div class="nav-group">System</div>
         <a class="nav-item" href="/demo/">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
@@ -245,11 +302,14 @@
       <div class="topbar">
         <div></div>
         <div class="chips">
-          <span class="chip"><span class="dot" id="online-dot"></span><span id="online-text">Online</span></span>
-          <span class="chip chip-device">
+          <span class="chip">
+            <span class="dot" id="online-dot"></span>
+            <span id="online-text">Online</span>
+          </span>
+          <span class="chip">
             <svg viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/>
-              <circle cx="7" cy="17" r="3"/><circle cx="17" cy="17" r="3"/>
+              <circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="7" r="2.5"/>
+              <circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="17" r="2.5"/>
             </svg>
             <span id="device-name">Device</span>
           </span>
@@ -258,121 +318,175 @@
 
       <div class="content">
         <div class="greeting">
-          <h1 id="greeting-text">Good Morning!</h1>
+          <h1>Good <span class="accent" id="greeting-tod">Morning</span>.</h1>
           <p>Your AI system is ready. What would you like to do today?</p>
         </div>
 
+        <div class="section-title">Capabilities</div>
         <div class="cap-grid">
           <a class="cap" href="/demo/vision_live.html">
-            <div class="cap-icon vision">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
               <h3>Vision</h3>
-              <p>Analyze images &amp; video</p>
+              <p>Analyze images and video</p>
             </div>
           </a>
 
           <a class="cap" href="/demo/docs_view.html">
-            <div class="cap-icon docs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <path d="M14 2v6h6M16 13H8M16 17H8"/>
-              </svg>
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <path d="M14 2v6h6M16 13H8M16 17H8"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
               <h3>Documents</h3>
-              <p>Extract &amp; understand</p>
+              <p>Extract and understand</p>
             </div>
           </a>
 
           <a class="cap" href="/demo/audio_view.html">
-            <div class="cap-icon audio">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
-                <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/>
-              </svg>
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
+                  <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
               <h3>Audio</h3>
-              <p>Transcribe &amp; understand</p>
+              <p>Transcribe and understand</p>
             </div>
           </a>
 
           <a class="cap" href="/demo/reasoning_chat.html">
-            <div class="cap-icon reasoning">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 21h6M12 3v2m6.36 1.64l-1.42 1.42M21 12h-2M6.34 6.34L4.93 4.93M3 12h2m14 6l-2-1m-10 1l2-1m-4-6a7 7 0 1114 0c0 3-2 4-3 5v3H8v-3c-1-1-3-2-3-5z"/>
-              </svg>
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21h6M12 3v2m6.36 1.64l-1.42 1.42M21 12h-2M6.34 6.34L4.93 4.93M3 12h2m14 6l-2-1m-10 1l2-1m-4-6a7 7 0 1114 0c0 3-2 4-3 5v3H8v-3c-1-1-3-2-3-5z"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
               <h3>Reasoning</h3>
-              <p>Think &amp; solve</p>
+              <p>Think and solve</p>
             </div>
           </a>
 
           <a class="cap" href="/demo/timeseries_view.html">
-            <div class="cap-icon analytics">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3v18h18M8 14l3-3 3 3 5-5"/>
-              </svg>
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 3v18h18M8 14l3-3 3 3 5-5"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
-              <h3>Analytics</h3>
-              <p>Process time series</p>
+              <h3>Time Series</h3>
+              <p>Forecast and detect anomalies</p>
             </div>
           </a>
 
-          <a class="cap" href="/demo/">
-            <div class="cap-icon more">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
+          <a class="cap" href="/demo/video_studio.html">
+            <div class="cap-head">
+              <div class="cap-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="6" width="14" height="12" rx="2"/>
+                  <path d="M22 8l-6 4 6 4V8z"/>
+                </svg>
+              </div>
+              <div class="cap-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M9 7h8v8"/>
+                </svg>
+              </div>
             </div>
             <div>
-              <h3>More</h3>
-              <p>Explore all capabilities</p>
+              <h3>Video Studio</h3>
+              <p>Live detect, pose, segment</p>
             </div>
           </a>
         </div>
 
+        <div class="section-title">Overview</div>
         <div class="lower">
           <div class="panel">
-            <div class="panel-title">Recent Activity</div>
-            <div id="activity"><div class="activity-row"><div class="activity-text"><div class="label" style="color: var(--dim)">no activity yet</div></div></div></div>
+            <div class="panel-head">
+              <div class="panel-title">Recent Activity</div>
+              <div class="panel-badge">LIVE</div>
+            </div>
+            <div id="activity">
+              <div class="activity-row">
+                <div class="activity-text">
+                  <div class="label" style="color: var(--dim)">no activity yet</div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="panel">
-            <div class="panel-title">System Status</div>
+            <div class="panel-head">
+              <div class="panel-title">System Status</div>
+              <div class="panel-badge">HEALTHY</div>
+            </div>
             <div id="status-rows">
               <div class="status-row">
                 <div class="status-label">Workers running</div>
-                <div class="status-value" id="stat-workers">-</div>
+                <div class="status-value" id="stat-workers">&mdash;</div>
                 <span class="status-dot" id="dot-ai"></span>
               </div>
               <div class="status-row">
                 <div class="status-label">Capabilities</div>
-                <div class="status-value" id="stat-caps">-</div>
+                <div class="status-value" id="stat-caps">&mdash;</div>
                 <span class="status-dot"></span>
               </div>
               <div class="status-row">
                 <div class="status-label">Uptime</div>
-                <div class="status-value" id="stat-uptime">-</div>
+                <div class="status-value" id="stat-uptime">&mdash;</div>
                 <span class="status-dot"></span>
               </div>
               <div class="status-row">
                 <div class="status-label">Audit rows</div>
-                <div class="status-value" id="stat-audit">-</div>
+                <div class="status-value" id="stat-audit">&mdash;</div>
                 <span class="status-dot"></span>
               </div>
               <div class="status-row">
                 <div class="status-label">Pending approvals</div>
-                <div class="status-value" id="stat-approvals">-</div>
+                <div class="status-value" id="stat-approvals">&mdash;</div>
                 <span class="status-dot" id="dot-approve"></span>
               </div>
             </div>
@@ -389,12 +503,12 @@ const API = "/api/v1";
 
 function greeting() {
   const h = new Date().getHours();
-  const g = document.getElementById("greeting-text");
-  if (h < 5)       g.textContent = "Good Night.";
-  else if (h < 12) g.textContent = "Good Morning!";
-  else if (h < 17) g.textContent = "Good Afternoon!";
-  else if (h < 21) g.textContent = "Good Evening!";
-  else             g.textContent = "Good Night.";
+  const g = document.getElementById("greeting-tod");
+  if (h < 5)       g.textContent = "Night";
+  else if (h < 12) g.textContent = "Morning";
+  else if (h < 17) g.textContent = "Afternoon";
+  else if (h < 21) g.textContent = "Evening";
+  else             g.textContent = "Night";
 }
 greeting();
 setInterval(greeting, 60000);
@@ -417,9 +531,9 @@ async function pollStatus() {
     document.getElementById("device-name").textContent = labelFor(s.device);
     const ready = (s.workers || []).filter(w => w.state === "Ready").length;
     document.getElementById("stat-workers").textContent = `${ready} / ${(s.workers || []).length}`;
-    document.getElementById("stat-caps").textContent = s.capability_count ?? "-";
+    document.getElementById("stat-caps").textContent = s.capability_count ?? "—";
     document.getElementById("stat-uptime").textContent = fmtUptime(s.uptime_s);
-    document.getElementById("stat-audit").textContent = s.audit_rows ?? "-";
+    document.getElementById("stat-audit").textContent = s.audit_rows ?? "—";
     document.getElementById("stat-approvals").textContent = s.pending_approvals ?? 0;
     document.getElementById("dot-ai").className = "status-dot " + (ready > 0 ? "" : "warn");
     document.getElementById("dot-approve").className = "status-dot " + ((s.pending_approvals || 0) > 0 ? "warn" : "");
@@ -428,11 +542,11 @@ async function pollStatus() {
     document.getElementById("online-dot").classList.add("off");
     document.getElementById("online-text").textContent = "Offline";
     document.getElementById("device-name").textContent = "No connection";
-    document.getElementById("stat-workers").textContent = "-";
-    document.getElementById("stat-caps").textContent = "-";
-    document.getElementById("stat-uptime").textContent = "-";
-    document.getElementById("stat-audit").textContent = "-";
-    document.getElementById("stat-approvals").textContent = "-";
+    document.getElementById("stat-workers").textContent = "—";
+    document.getElementById("stat-caps").textContent = "—";
+    document.getElementById("stat-uptime").textContent = "—";
+    document.getElementById("stat-audit").textContent = "—";
+    document.getElementById("stat-approvals").textContent = "—";
     document.getElementById("dot-ai").className = "status-dot fail";
     document.getElementById("dot-approve").className = "status-dot fail";
   }

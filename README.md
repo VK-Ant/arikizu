@@ -10,14 +10,12 @@
 
 <p align="center">
  <a href="QUICKSTART.md">Quickstart</a> ·
- <a href="docs/DEMO.md">Demo walkthrough</a> ·
- <a href="docs/CUSTOMIZE.md">Customize</a> ·
- <a href="docs/AGENTS.md">Agents</a> ·
- <a href="docs/MCP.md">MCP</a> ·
- <a href="docs/GOVERNANCE.md">Governance</a> ·
+ <a href="docs/WHY.md">Why</a> ·
  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
- <a href="docs/MODELS.md">Models</a> ·
- <a href="docs/HOW_IT_RUNS.md">How it runs</a> ·
+ <a href="docs/SETUP.md">Setup &amp; Models</a> ·
+ <a href="docs/DEMOS.md">Demos</a> ·
+ <a href="docs/AGENTS.md">Agents, MCP &amp; Governance</a> ·
+ <a href="docs/CHANGES.md">Changelog</a> ·
  <a href="SECURITY.md">Security</a>
 </p>
 
@@ -36,8 +34,8 @@ Raspberry Pi, or small x86_64 server) with a browser dashboard, an
 append-only audit log, and no cloud account required.
 
 Why "OS": the Rust runtime does what init + syscall-dispatch + policy + syslog
-do for Linux, scoped to the AI layer. See [`docs/WHY_OS.md`](docs/WHY_OS.md)
-for the full argument, and [`docs/HOW_IT_RUNS.md`](docs/HOW_IT_RUNS.md) for
+do for Linux, scoped to the AI layer. See [`docs/WHY.md`](docs/WHY.md)
+for the full argument, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for
 the stack diagram (Arikizu is a systemd service on top of Raspberry Pi OS;
 Linux is not replaced).
 
@@ -156,7 +154,7 @@ Do these in order. Don't skip. Each step takes 1-10 minutes.
 
 ```bash
 cd ~
-unzip -o arikizu-v1.7.11.zip
+unzip -o arikizu-v1.8.4.zip
 cd ~/arikizu
 ```
 
@@ -393,9 +391,10 @@ export ARIKIZU_HTTP=http://127.0.0.1:7000
 python3 mcp/arikizu_mcp_server.py          # test it runs
 ```
 
-Then wire it up to Claude Code / Cline / Cursor using one of the config
-snippets in [`examples/mcp-configs/`](examples/mcp-configs/). Replace
-the `/ABSOLUTE/PATH/TO/arikizu` placeholder with your checkout path.
+Then wire it up to any MCP-compatible agent client using one of the
+config snippets in [`examples/mcp-configs/`](examples/mcp-configs/).
+Replace the `/ABSOLUTE/PATH/TO/arikizu` placeholder with your checkout
+path.
 
 ### All at once (one terminal, copy-paste)
 
@@ -444,7 +443,7 @@ answer, response back. Everything else is more interesting data flowing
 through the same path.
 
 Full demo walkthrough with screenshots and expected outputs:
-[`docs/DEMO.md`](docs/DEMO.md).
+[`docs/DEMOS.md`](docs/DEMOS.md).
 
 ---
 
@@ -495,19 +494,21 @@ call reaches another worker. Full UI at
 [`/demo/agent_studio.html`](http://127.0.0.1:7000/demo/agent_studio.html).
 Guide: [`docs/AGENTS.md`](docs/AGENTS.md).
 
-**MCP server.** For agents that live OUTSIDE Arikizu (Claude Code,
-Cline, Cursor, your own framework), Arikizu ships an MCP server at
+**MCP server.** For agents that live OUTSIDE Arikizu (any
+MCP-compatible AI agent client), Arikizu ships an MCP server at
 [`mcp/arikizu_mcp_server.py`](mcp/arikizu_mcp_server.py). It exposes a
 safe subset of capabilities as MCP tools. External agents call them
 like any other tool; the calls still land on the HTTP router and go
-through the global policy and audit. Guide:
-[`docs/MCP.md`](docs/MCP.md).
+through the global policy and audit. Config snippets for popular
+clients are in
+[`examples/mcp-configs/`](examples/mcp-configs/). Guide:
+[`docs/AGENTS.md`](docs/AGENTS.md).
 
 **Responsible AI by architecture.** Policy + audit + approval are not a
 layer bolted on. The system is designed so that governance is a thin,
 local, auditable ring around a runtime whose data never leaves the
 device. Four claims and the SQL queries that verify them:
-[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md).
+[`docs/AGENTS.md`](docs/AGENTS.md).
 
 ---
 
@@ -528,8 +529,8 @@ Ready-to-use starting points live in [`examples/`](examples/):
   can drop into `video_worker/actions.py` (squatting, reaching_up,
   looking_down, hugging, thumbs_up). Each is one function, no training.
 - [`examples/mcp-configs/`](examples/mcp-configs/) — `.mcp.json`
-  snippets for Claude Code, Cline, and Cursor.
-- [`examples/demo-pages/blank.html`](examples/demo-pages/blank.html) —
+  snippets for popular MCP-compatible agent clients.
+- [`demo/web/_template.html`](demo/web/_template.html) —
   blank HTML template with the shared Arikizu header and palette; copy
   and fill in to start your own demo page in one step.
 
@@ -551,7 +552,7 @@ through each with concrete code snippets:
 - Load your own data (file upload, server-side path, webcam / mic, LAN sensor stream)
 - Deploy on Pi / Jetson / Mac / Linux / WSL
 
-See [`docs/CUSTOMIZE.md`](docs/CUSTOMIZE.md).
+See [`docs/AGENTS.md`](docs/AGENTS.md).
 
 ---
 
@@ -589,14 +590,14 @@ Backends are auto-selected per device:
 - Linux x86_64 without NVIDIA: `onnxruntime` CPU
 
 `scripts/install-runtime.sh` detects your device and installs the matching
-runtime. See [`docs/MODELS.md`](docs/MODELS.md) for the per-worker catalog
+runtime. See [`docs/SETUP.md`](docs/SETUP.md) for the per-worker catalog
 and model-swap steps.
 
 ---
 
 ## Install (three tiers)
 
-Each tier is a different claim; see [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+Each tier is a different claim; see [`docs/SETUP.md`](docs/SETUP.md).
 
 ### Tier 3: Flash to a Pi (how it becomes an OS)
 
@@ -667,7 +668,7 @@ no npm, no bundler. Open `http://127.0.0.1:7000/demo/` for the hub.
 | `/demo/guard_view.html` | PII scan + redacted preview (side by side) |
 | `/demo/eval_view.html` | Predicted vs expected + score cards (exact, Jaccard, Golden set) |
 
-Walkthrough of each one with expected output: [`docs/DEMO.md`](docs/DEMO.md).
+Walkthrough of each one with expected output: [`docs/DEMOS.md`](docs/DEMOS.md).
 
 ---
 
@@ -691,7 +692,7 @@ Dashboard from your laptop: `http://arikizu-dev.local:7000/`
 (or the Pi's IP from `hostname -I`).
 
 Pi vision tutorial (Pi Camera + the vision model + approval gate, 1 hour):
-[`docs/PI_VISION_TUTORIAL.md`](docs/PI_VISION_TUTORIAL.md).
+[`docs/DEMOS.md`](docs/DEMOS.md).
 
 ---
 
@@ -711,7 +712,7 @@ flowchart TB
         direction LR
         UI["Browser UI<br/>operator dashboard + studios"]
         CLI["CLI<br/>arikizu run"]
-        EXT["External agents<br/>Claude Code · Cline · Cursor"]
+        EXT["External AI agents<br/>via MCP"]
     end
 
     MCP["<b>MCP Server</b><br/>mcp/arikizu_mcp_server.py<br/>stdio adapter"]
@@ -780,23 +781,17 @@ correction feeds the next training cycle.
 
 ## Docs
 
-**Start here**
+Six consolidated docs. Each one has internal sections (`## Part 1`, `## Part 2`, ...).
 
-- [`docs/SETUP.md`](docs/SETUP.md): complete beginner guide for every edge device: Pi, Jetson, Mac, Linux, WSL. Each step tagged by device. Zero Linux knowledge needed.
-- [`QUICKSTART.md`](QUICKSTART.md): the shorter path for people comfortable with the terminal
-- [`docs/DEMO.md`](docs/DEMO.md): click-by-click walkthrough of every demo view
-- [`docs/PI_VISION_TUTORIAL.md`](docs/PI_VISION_TUTORIAL.md): 1-hour hands-on: Pi + Camera + the vision model + approval gate
-
-**Understand it**
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): full architecture reference (14 sections, with diagram and PDF export)
-- [`docs/WHY_AND_WHO.md`](docs/WHY_AND_WHO.md): why this exists, who it's for, where it helps, where it doesn't
-- [`docs/WHY_OS.md`](docs/WHY_OS.md): the "is this really an OS?" argument
-- [`docs/HOW_IT_RUNS.md`](docs/HOW_IT_RUNS.md): stack diagram + boot sequence
-- [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md): three install tiers (dev binary, deb, flashable image)
-- [`docs/MODELS.md`](docs/MODELS.md): LLM strategy, runtime optimization, per-worker catalog, defaults
-- [`docs/MODULES.md`](docs/MODULES.md): per-module index with links to each crate and worker README
-- [`docs/SPEC.md`](docs/SPEC.md): non-fit list, five-point qualification, eleven target verticals
+| Doc | What's inside |
+|-----|---------------|
+| [`QUICKSTART.md`](QUICKSTART.md) | Shortest path to a running system |
+| [`docs/WHY.md`](docs/WHY.md) | Why Arikizu exists, who it's for, why we call it an OS |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System layers, module index, how it runs on hardware, spec pointer |
+| [`docs/SETUP.md`](docs/SETUP.md) | Setup for every device (Pi, Jetson, Mac, Linux, WSL), install tiers, model catalog |
+| [`docs/DEMOS.md`](docs/DEMOS.md) | Demo walkthrough, Pi vision tutorial, Video Studio test checklist |
+| [`docs/AGENTS.md`](docs/AGENTS.md) | Custom agents, MCP server for external tools, governance, customization |
+| [`docs/CHANGES.md`](docs/CHANGES.md) | Changelog |
 
 **Project hygiene**
 
@@ -864,7 +859,7 @@ Ant Intelligence libraries.
 | Weekend 20 | Full public release |
 
 Non-fit list, five-point qualification, and target verticals:
-[`docs/SPEC.md`](docs/SPEC.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 

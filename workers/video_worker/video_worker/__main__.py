@@ -409,14 +409,25 @@ def main() -> None:
                 seg_result = segmenter.segment(mp_img, roi)
             ms = round((time.perf_counter() - t) * 1000, 1)
             cat_mask = seg_result.category_mask.numpy_view()
-            # The INSIDE class is category 0 (clicked object) per magic_touch.
+            # MediaPipe may return a 2D or 3D array. Squeeze down to 2D.
+            if cat_mask.ndim == 3:
+                cat_mask = cat_mask.squeeze(axis=-1 if cat_mask.shape[-1] == 1 else 0)
+            # magic_touch flags the clicked object as category 0; try both
+            # 0 and 1 conventions depending on model version.
             inside = (cat_mask == 0).astype(np.uint8) * 255
+            if int(inside.sum()) == 0:
+                inside = (cat_mask == 1).astype(np.uint8) * 255
+            # Still nothing? The click may have hit background; use a
+            # dilated version so we return something useful.
+            if int(inside.sum()) == 0:
+                inside = (cat_mask > 0).astype(np.uint8) * 255
             # Compute bbox of the mask
             ys, xs = np.where(inside > 0)
             if len(xs) == 0:
                 bbox = None
+                h, w = inside.shape[:2]
             else:
-                h, w = inside.shape
+                h, w = inside.shape[:2]
                 bbox = [float(xs.min() / w), float(ys.min() / h),
                         float(xs.max() / w), float(ys.max() / h)]
             # Encode mask as PNG
