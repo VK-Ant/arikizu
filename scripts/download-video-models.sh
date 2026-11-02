@@ -87,44 +87,39 @@ if (( VLM_ONLY == 0 )); then
         done
     fi
 
-    # Guaranteed fallback: generate the ONNX locally via ultralytics.
-    # The .pt file (6.5 MB) downloads from the ultralytics GitHub release,
-    # then torch converts it to ONNX. First-run cost is torch install.
+    # Guaranteed fallback: export the ONNX locally via ultralytics.
+    # Done in a throwaway venv via `uv run --with ultralytics` so it
+    # avoids PEP 668 ("externally-managed-environment") on Debian/Ubuntu
+    # and never touches system Python. Torch doesn't support Python 3.14
+    # yet, so we pin to 3.12.
     if (( YOLO_OK == 0 )); then
-        printf '%s  ..  mirrors failed. Falling back to local ultralytics export (needs torch).%s\n' \
+        printf '%s  ..  mirrors failed. Falling back to local export via uv (~2 min first run).%s\n' \
                "$GREY" "$RESET"
-        if ! command -v python3 >/dev/null 2>&1; then
-            printf '  %s!!  python3 not found; cannot auto-export.%s\n' "$YELLOW" "$RESET"
+        if ! command -v uv >/dev/null 2>&1; then
+            printf '  %s!!  uv not installed; cannot auto-export.%s\n' "$YELLOW" "$RESET"
         else
-            if ! python3 -c "import ultralytics" 2>/dev/null; then
-                printf '  .. installing ultralytics (one-time)...\n'
-                pip install --quiet ultralytics 2>&1 | tail -2 || true
-            fi
-            if python3 - <<PYEOF 2>&1
-import shutil, sys
-try:
-    from ultralytics import YOLO
-except ImportError as e:
-    print(f"ultralytics not installed: {e}"); sys.exit(1)
-model = YOLO("yolov8n-seg.pt")        # downloads .pt from ultralytics release
-exported = model.export(format="onnx", imgsz=640, opset=12)
-shutil.move(str(exported), "$MODELS_DIR/yolov8n-seg.onnx")
-print("ok", "$MODELS_DIR/yolov8n-seg.onnx")
-PYEOF
-            then
-                if [[ -f "$MODELS_DIR/yolov8n-seg.onnx" ]]; then
-                    printf '%s  ok  yolov8n-seg.onnx exported locally via ultralytics%s\n' "$GREEN" "$RESET"
+            pushd "$MODELS_DIR" >/dev/null
+            if uv run --quiet --with ultralytics --python 3.12 \
+                 python -c "from ultralytics import YOLO; YOLO('yolov8n-seg.pt').export(format='onnx', imgsz=640)" \
+                 2>&1 | tail -5; then
+                if [[ -f yolov8n-seg.onnx ]]; then
+                    printf '%s  ok  yolov8n-seg.onnx exported locally via uv + ultralytics%s\n' "$GREEN" "$RESET"
                     YOLO_OK=1
+                else
+                    printf '  %s!!  export ran but yolov8n-seg.onnx not found%s\n' "$YELLOW" "$RESET"
                 fi
             fi
+            # Clean up the .pt file ultralytics downloaded alongside
+            rm -f yolov8n-seg.pt
+            popd >/dev/null
         fi
     fi
 
     if (( YOLO_OK == 0 )); then
-        printf '  %s!!  yolov8n-seg.onnx not obtained. Run manually:%s\n' "$YELLOW" "$RESET"
-        printf '      pip install ultralytics\n'
-        printf '      python -c "from ultralytics import YOLO; YOLO('"'"'yolov8n-seg.pt'"'"').export(format=\\"onnx\\", imgsz=640)"\n'
-        printf '      mv yolov8n-seg.onnx %s/\n' "$MODELS_DIR"
+        printf '  %s!!  yolov8n-seg.onnx not obtained. Run manually (uses uv to avoid PEP 668):%s\n' "$YELLOW" "$RESET"
+        printf '      cd %s\n' "$MODELS_DIR"
+        printf '      uv run --with ultralytics --python 3.12 \\\n'
+        printf '          python -c "from ultralytics import YOLO; YOLO('"'"'yolov8n-seg.pt'"'"').export(format=\\"onnx\\", imgsz=640)"\n'
     fi
 fi
 

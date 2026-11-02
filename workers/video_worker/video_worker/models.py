@@ -212,14 +212,15 @@ def ensure(key: str) -> Path:
             continue
 
     # Model-specific fallback hint. For yolov8n-seg, the guaranteed fix
-    # is a local ultralytics export; mention it inline.
+    # is a local ultralytics export via uv (avoids PEP 668 on Debian/
+    # Ubuntu system Python).
     extra_hint = ""
     if key == "yolov8n_seg":
         extra_hint = (
-            " Guaranteed fallback: `pip install ultralytics && "
-            "python -c \"from ultralytics import YOLO; "
-            "YOLO('yolov8n-seg.pt').export(format='onnx', imgsz=640)\" && "
-            f"mv yolov8n-seg.onnx {dest}`."
+            f" Guaranteed fallback (uses uv, no system pip): "
+            f"`cd {MODELS_DIR} && uv run --with ultralytics --python 3.12 "
+            f"python -c \"from ultralytics import YOLO; "
+            f"YOLO('yolov8n-seg.pt').export(format='onnx', imgsz=640)\"`."
         )
     raise RuntimeError(
         f"Could not download {spec['file']} from any of {len(urls)} mirror(s). "
