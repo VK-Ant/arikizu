@@ -114,16 +114,24 @@
         <span class="pill">timeseries.forecast</span><span class="pill">timeseries.detect_anomaly</span>
       </a>
       <a class="card" href="/demo/video_studio.html">
-        <h3>Video Studio <span class="badge">multimodal action</span></h3>
+        <h3>Vision <span class="badge">multimodal action</span></h3>
         <p>Upload a clip or open your webcam. Give a text prompt or a reference image. Get a timestamped action timeline, pose, scene, boxes and masks. Runs on your device.</p>
         <span class="pill">video.analyze_frame</span><span class="pill">video.live_detect</span><span class="pill">video.live_describe</span>
       </a>
+      <a class="card" href="/demo/catalog.html">
+        <h3>Catalog <span class="badge">browse + try</span></h3>
+        <p>Every capability on this instance. See the input/output schema. Call any capability live from the browser with a one-click Try form. Copy a curl command to use elsewhere.</p>
+        <span class="pill">all capabilities</span>
+      </a>
       <a class="card" href="/demo/agent_studio.html">
-        <h3>Agent Studio <span class="badge">custom chatbot</span></h3>
+        <h3>Agents <span class="badge">custom chatbot</span></h3>
         <p>Build your own agents. Give them a system prompt, pick which capabilities they may call, and chat. Every tool call is governed by auto / ask / deny policy and logged to audit.</p>
         <span class="pill">agent.create</span><span class="pill">agent.chat</span><span class="pill">agent.policy_default</span>
       </a>
     </div>
+
+    <h2>Your demos <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">drop an HTML in <code>demo/web/user/</code>, add it to <code>manifest.json</code>, reload</span></h2>
+    <div class="grid" id="user-views"></div>
 
     <h2>One-click smoke test</h2>
     <button class="smoke-btn" id="smoke-run">Run smoke test</button>
@@ -235,6 +243,37 @@ document.getElementById("smoke-run").onclick = async () => {
 
 pollStatus();
 setInterval(pollStatus, 3000);
+
+// --- User demos: auto-render from demo/web/user/manifest.json ---
+async function loadUserDemos() {
+  const el = document.getElementById("user-views");
+  try {
+    const r = await fetch("/demo/user/manifest.json", {cache: "no-cache"});
+    if (!r.ok) throw new Error("no manifest");
+    const data = await r.json();
+    const demos = (data.demos || []).filter(d => d && d.title && d.path);
+    if (!demos.length) {
+      el.innerHTML = `<div class="card" style="grid-column:1/-1;color:var(--muted);font-size:13px">
+        No custom demos yet. Copy <code>demo/web/user/hello.html</code>, give it a new name,
+        and add an entry to <code>demo/web/user/manifest.json</code>. It appears here on next reload.</div>`;
+      return;
+    }
+    el.innerHTML = demos.map(d => {
+      const caps = (d.capabilities || []).map(c => `<span class="pill">${c}</span>`).join("");
+      const badge = d.badge ? `<span class="badge wait">${d.badge}</span>` : "";
+      return `<a class="card" href="${d.path}">
+        <h3>${d.title} ${badge}</h3>
+        <p>${d.description || ""}</p>
+        ${caps}
+      </a>`;
+    }).join("");
+  } catch (e) {
+    el.innerHTML = `<div class="card" style="grid-column:1/-1;color:var(--muted);font-size:13px">
+      <code>demo/web/user/manifest.json</code> not found or invalid. Create one with a <code>demos</code> array.
+      See <code>demo/web/user/hello.html</code> for a sample.</div>`;
+  }
+}
+loadUserDemos();
 
 // --- Diagnostics: one line per model, PASS/FAIL ---
 async function runDiag() {

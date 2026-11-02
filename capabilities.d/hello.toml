@@ -1,0 +1,26 @@
+# Registry entries for custom/hello.py.
+# Delete this file (and custom/hello.py) when you don't need the demo.
+
+[hello_greet]
+name = "hello.greet"
+worker = "custom"
+input = { name = "string", language = "string" }
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[hello_timestamp]
+name = "hello.timestamp"
+worker = "custom"
+input = {}
+output = "object"
+timeout_ms = 2000
+priority = 0
+
+[hello_add]
+name = "hello.add"
+worker = "custom"
+input = { a = "number", b = "number" }
+output = "object"
+timeout_ms = 2000
+priority = 0

@@ -1,0 +1,81 @@
+# Retail floor people-count + dwell per hour.
+#
+# Every 10 seconds, snap the overhead camera, count people, and
+# aggregate the per-hour counts to a CSV. End of day: produce a
+# summary report.
+
+name: retail_count
+description: Hourly people-count and dwell for a retail store.
+
+trigger:
+  type: schedule
+  cron: "*/10 * * * * *"              # every 10 seconds
+
+inputs:
+  camera: cam_store_overhead
+  output_csv: /mnt/analytics/retail/hourly.csv
+
+stages:
+  - name: snap
+    capability: vision.snapshot
+    inputs:
+      device: "{{inputs.camera}}"
+
+  - name: detect
+    capability: vision.detect
+    inputs:
+      image_base64: "{{snap.image_base64}}"
+      classes: [person]
+      confidence: 0.5
+
+  - name: aggregate
+    capability: timeseries.append
+    inputs:
+      signal: retail_count
+      value: "{{detect.count}}"
+      timestamp: "{{snap.ts}}"
+
+  - name: hourly_roll
+    capability: timeseries.rollup
+    inputs:
+      signal: retail_count
+      period: 1h
+      stats: [mean, max, min]
+      write_csv: "{{inputs.output_csv}}"
+
+actions:
+  - type: audit
+    message: "retail_count: {{detect.count}} people on {{inputs.camera}}"
+
+# A second pipeline in the same file (if you want). The runtime supports
+# `---` separators to pack multiple small pipelines together.
+---
+name: retail_daily_report
+description: End-of-day report of the hourly rollup.
+
+trigger:
+  type: schedule
+  cron: "0 0 23 * * *"               # 23:00 local, daily
+
+stages:
+  - name: load_day
+    capability: timeseries.load
+    inputs:
+      signal: retail_count
+      window_hours: 24
+
+  - name: summarize
+    capability: reasoning.summarize
+    inputs:
+      template: |
+        Summarize this retail store's day in 3 bullets:
+        - peak hour and count
+        - total unique visits (approximation)
+        - trend vs. the previous day
+        Data: {{load_day.series | json}}
+
+actions:
+  - type: email
+    to: "${STORE_MANAGER_EMAIL}"
+    subject: "Store {{inputs.camera}} - daily report {{now | date('%Y-%m-%d')}}"
+    body: "{{summarize.summary}}"

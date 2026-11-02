@@ -280,7 +280,7 @@ you make a call on any demo page, it appears in Recent Activity within
 
 ---
 
-## 10. Video Studio: multimodal action search
+## 10. Vision: multimodal action search
 
 Three input modes, same pipeline. Runs on your device.
 

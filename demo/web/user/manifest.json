@@ -1,0 +1,12 @@
+{
+  "_comment": "List YOUR custom demos here. Each entry becomes a card on /demo/. Minimum fields: title, path. Add description and capabilities for a richer card. On the next page reload the home demo index auto-discovers everything in this file. Drop a new HTML file in this folder and add its entry below.",
+  "demos": [
+    {
+      "title": "Hello Arikizu",
+      "path": "/demo/user/hello.html",
+      "description": "A one-page example that calls three capabilities and shows their output. Copy this file to start your own.",
+      "capabilities": ["test.echo", "reasoning.answer", "vision.detect"],
+      "badge": "example"
+    }
+  ]
+}

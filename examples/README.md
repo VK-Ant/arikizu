@@ -10,11 +10,13 @@ themselves are Apache 2.0 like the rest of the project.
 examples/
 ├── agents/               Agent definitions you can import with one call
 ├── actions/              Custom action rules you can drop into video_worker
-└── mcp-configs/          .mcp.json snippets for MCP-compatible agent clients
+├── mcp-configs/          .mcp.json snippets for MCP-compatible agent clients
+└── python-apps/          Streamlit and Gradio apps that call Arikizu over HTTP
 ```
 
-A blank HTML template for new demo pages lives at
-[`../demo/web/_template.html`](../demo/web/_template.html).
+HTML starter demos live at [`../demo/web/user/`](../demo/web/user/)
+(drop files there and they auto-appear on the Demos page). A blank
+template is at [`../demo/web/_template.html`](../demo/web/_template.html).
 
 ---
 
@@ -38,7 +40,7 @@ curl -X POST http://127.0.0.1:7000/api/v1/call/agent/import \
   -d '{"payload": {"file_path": "examples/agents/safety-inspector.json"}}'
 ```
 
-Or click **Import examples** in Agent Studio UI (`/demo/agent_studio.html`)
+Or click **Import examples** in Agents UI (`/demo/agent_studio.html`)
 to load all five at once.
 
 **Make your own.** Copy any of these JSON files, edit the `name`,
@@ -49,7 +51,7 @@ entry is `auto` / `ask` / `deny` per capability.
 
 ## actions/
 
-Custom action rules for Video Studio. These extend the 12 built-in
+Custom action rules for Vision. These extend the 12 built-in
 actions (walking, running, sitting, standing, waving, kicking, jumping,
 hands_up, arms_crossed, bending, falling, pointing).
 
@@ -97,7 +99,7 @@ Seven recipes with concrete code:
 5. Add a demo page
 6. Load your own data
 7. Deploy on a device
-8. Customize the Video Studio
+8. Customize the Vision pipeline
 
 Plus the agent + MCP + governance docs:
 

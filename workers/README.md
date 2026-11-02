@@ -15,7 +15,7 @@ workers/
 ├── memory_worker/ adaptive-intelligence; memory.recall, update, reward
 ├── guard_worker/ AntGuard; guard.scan, redact, audit
 ├── eval_worker/ LLMEvalKit; eval.score, compare, golden_run
-└── video_worker/ Video Studio: MediaPipe + SegFormer + Qwen2.5-VL;
+└── video_worker/ Vision: MediaPipe + SegFormer + Qwen2.5-VL;
                    video.live_detect, video.analyze_frame, video.live_describe,
                    video.search_image (reference-image action search),
                    video.recognize_pose, video.actions_known (12 defaults),

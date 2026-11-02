@@ -1,0 +1,50 @@
+# Hello Arikizu pipeline.
+#
+# Chains the built-in `test.echo`, your custom `hello.greet`, and a
+# conditional classifier. Fires manually and (optionally) every 5 minutes.
+# Copy this file to start your own pipeline.
+#
+# Try it from the terminal:
+#   curl -X POST http://127.0.0.1:7000/api/v1/call/pipeline/run \
+#     -H 'content-type: application/json' \
+#     -d '{"payload": {"name": "hello", "inputs": {"who": "VK", "language": "ta"}}}'
+
+name: hello
+description: Minimal end-to-end YAML pipeline example.
+
+# Fire manually AND on a schedule. Comment out the schedule block if
+# you only want the manual trigger.
+trigger:
+  type: schedule
+  cron: "0 */5 * * * *"      # every 5 minutes (6-field cron with seconds)
+
+inputs:
+  who: friend
+  language: en
+
+stages:
+  - name: echo
+    capability: test.echo
+    inputs:
+      message: "pipeline 'hello' running for {{inputs.who}}"
+
+  - name: greet
+    capability: hello.greet
+    inputs:
+      name: "{{inputs.who}}"
+      language: "{{inputs.language}}"
+
+  - name: classify
+    capability: pipeline.classify
+    inputs:
+      rules:
+        - level: tamil
+          when: "{{inputs.language == 'ta'}}"
+        - level: hindi
+          when: "{{inputs.language == 'hi'}}"
+        - level: other
+          when: default
+
+actions:
+  - type: audit
+    message: "hello pipeline done for {{inputs.who}} ({{classify.level}}): {{greet.greeting}}"

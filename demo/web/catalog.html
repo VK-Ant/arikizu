@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capability Catalog</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#0a0a0a; --muted:#666666; --accent:#ff6b1a;
+    --card:#ffffff; --border:#e5e5e5; --pass:#2d8a4e; --fail:#b84040;
+    --mono: ui-monospace, Menlo, Consolas, monospace;
+    --sans: -apple-system, system-ui, Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0a0a0a; --fg:#ffffff; --muted:#999999; --accent:#ff8a3a;
+            --card:#141414; --border:#2a2a2a; color-scheme: dark; }
+  }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{padding:20px 32px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  header h1{margin:0;font-size:22px;letter-spacing:-0.01em}
+  header .tag{color:var(--muted);font-size:13px;margin-top:4px}
+  main{padding:24px 32px;max-width:1200px;margin:0 auto}
+  .filters{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+  input[type=text],select{font:inherit;background:var(--card);color:var(--fg);
+    border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:220px}
+  .stats{color:var(--muted);font-size:13px}
+  .cap{background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:16px 20px;margin-bottom:12px}
+  .cap-head{display:flex;align-items:center;gap:12px;cursor:pointer}
+  .cap-name{font-family:var(--mono);font-size:14px;font-weight:600;flex:1}
+  .cap-worker{font-size:11px;color:var(--muted);background:rgba(255,107,26,0.08);
+    padding:2px 8px;border-radius:10px;font-family:var(--mono);border:1px solid rgba(255,107,26,0.2)}
+  .cap-timeout{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .cap-body{display:none;padding-top:14px;margin-top:14px;border-top:1px solid var(--border)}
+  .cap.open .cap-body{display:block}
+  .cap-row{display:flex;gap:8px;align-items:start;margin-bottom:8px;font-size:12px}
+  .cap-row .label{min-width:70px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;font-size:10px;padding-top:3px}
+  .cap-row .val{font-family:var(--mono);font-size:12px;flex:1}
+  .try{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)}
+  .try h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;
+    margin:0 0 10px;font-weight:600}
+  textarea{font:inherit;font-family:var(--mono);font-size:12px;background:var(--bg);
+    color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:10px;width:100%;
+    min-height:70px;resize:vertical}
+  button{font:inherit;background:var(--accent);color:#fff;border:none;border-radius:6px;
+    padding:7px 16px;cursor:pointer;font-weight:600;font-size:13px}
+  button.sec{background:var(--card);color:var(--fg);border:1px solid var(--border)}
+  button:disabled{opacity:0.5;cursor:not-allowed}
+  .try-row{display:flex;gap:10px;margin:10px 0;align-items:center;flex-wrap:wrap}
+  pre.out{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+    padding:10px;font-family:var(--mono);font-size:11px;max-height:260px;overflow:auto;
+    white-space:pre-wrap;word-wrap:break-word;margin:0}
+  .ok{color:var(--pass)} .err{color:var(--fail)}
+  .group-title{font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;
+    font-weight:700;margin:24px 0 10px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Capability Catalog</h1>
+    <div class="tag">Every capability on this instance. Click to expand, hit <b>Try it</b> to call live from the browser.</div>
+  </div>
+  <div class="stats" id="stats">loading...</div>
+</header>
+<main>
+  <div class="filters">
+    <input id="q" type="text" placeholder="filter by name (e.g. vision, audio, hello)">
+    <select id="worker-filter"><option value="">all workers</option></select>
+    <span class="stats" id="count"></span>
+  </div>
+  <div id="caps"></div>
+</main>
+
+<script>
+"use strict";
+const API = "/api/v1";
+let CAPS = [];
+
+async function fetchCaps() {
+  const r = await fetch(`${API}/capabilities`);
+  const j = await r.json();
+  // Response may be {capabilities: [...]} or a plain array; handle both.
+  CAPS = Array.isArray(j) ? j : (j.capabilities || j.items || []);
+  document.getElementById("stats").textContent =
+    `${CAPS.length} capabilities on this instance`;
+  const workers = [...new Set(CAPS.map(c => c.worker).filter(Boolean))].sort();
+  const sel = document.getElementById("worker-filter");
+  for (const w of workers) {
+    const opt = document.createElement("option");
+    opt.value = w; opt.textContent = w;
+    sel.appendChild(opt);
+  }
+  render();
+}
+
+function groupBy(arr, keyFn) {
+  const out = {};
+  for (const x of arr) {
+    const k = keyFn(x) || "other";
+    (out[k] = out[k] || []).push(x);
+  }
+  return out;
+}
+
+function schemaDefault(input) {
+  if (!input || typeof input !== "object") return {};
+  const out = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (v === "number" || v === "integer") out[k] = 0;
+    else if (v === "boolean") out[k] = false;
+    else if (v === "array") out[k] = [];
+    else if (v === "object") out[k] = {};
+    else out[k] = "";
+  }
+  return out;
+}
+
+function render() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const w = document.getElementById("worker-filter").value;
+  const filtered = CAPS.filter(c =>
+    (!q || (c.name || "").toLowerCase().includes(q)) &&
+    (!w || c.worker === w)
+  );
+  document.getElementById("count").textContent =
+    filtered.length === CAPS.length ? "" : `showing ${filtered.length}`;
+
+  // Group by prefix before the dot (vision.detect -> "vision")
+  const grouped = groupBy(filtered, c => (c.name || "").split(".")[0]);
+  const el = document.getElementById("caps");
+  el.innerHTML = "";
+  for (const group of Object.keys(grouped).sort()) {
+    const h = document.createElement("div");
+    h.className = "group-title";
+    h.textContent = group;
+    el.appendChild(h);
+    for (const cap of grouped[group].sort((a, b) => a.name.localeCompare(b.name))) {
+      el.appendChild(renderCap(cap));
+    }
+  }
+}
+
+function renderCap(cap) {
+  const d = document.createElement("div");
+  d.className = "cap";
+  const safeId = cap.name.replace(/[^a-z0-9]/gi, "_");
+  const defaultPayload = JSON.stringify(schemaDefault(cap.input), null, 2);
+  d.innerHTML = `
+    <div class="cap-head" data-toggle>
+      <div class="cap-name">${cap.name}</div>
+      <div class="cap-worker">${cap.worker || "?"}</div>
+      <div class="cap-timeout">${cap.timeout_ms || 5000} ms</div>
+    </div>
+    <div class="cap-body">
+      <div class="cap-row"><div class="label">input</div>
+        <div class="val">${cap.input ? JSON.stringify(cap.input) : "<em>any</em>"}</div></div>
+      <div class="cap-row"><div class="label">output</div>
+        <div class="val">${cap.output || "?"}</div></div>
+      ${cap.priority !== undefined ? `<div class="cap-row"><div class="label">priority</div><div class="val">${cap.priority}</div></div>` : ""}
+      <div class="try">
+        <h4>Try it</h4>
+        <textarea id="in-${safeId}">${defaultPayload}</textarea>
+        <div class="try-row">
+          <button data-call="${cap.name}">Call</button>
+          <button class="sec" data-copy="${cap.name}">Copy curl</button>
+          <span class="stats" id="meta-${safeId}"></span>
+        </div>
+        <pre class="out" id="out-${safeId}">(click Call to run)</pre>
+      </div>
+    </div>`;
+  d.querySelector("[data-toggle]").addEventListener("click", () => d.classList.toggle("open"));
+  d.querySelector("[data-call]").addEventListener("click", (e) => {
+    e.stopPropagation();
+    runCap(cap.name, safeId);
+  });
+  d.querySelector("[data-copy]").addEventListener("click", (e) => {
+    e.stopPropagation();
+    copyCurl(cap.name, safeId);
+  });
+  return d;
+}
+
+async function runCap(name, safeId) {
+  const outEl = document.getElementById(`out-${safeId}`);
+  const metaEl = document.getElementById(`meta-${safeId}`);
+  let payload;
+  try { payload = JSON.parse(document.getElementById(`in-${safeId}`).value || "{}"); }
+  catch (e) { outEl.innerHTML = `<span class="err">payload is not valid JSON: ${e.message}</span>`; return; }
+  outEl.textContent = "calling...";
+  const t0 = performance.now();
+  try {
+    const r = await fetch(`${API}/call/${name.replace(".", "/")}`, {
+      method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({payload}),
+    });
+    const ms = Math.round(performance.now() - t0);
+    const j = await r.json();
+    outEl.textContent = JSON.stringify(j, null, 2);
+    metaEl.innerHTML = r.ok
+      ? `<span class="ok">HTTP ${r.status} · ${ms} ms</span>`
+      : `<span class="err">HTTP ${r.status} · ${ms} ms</span>`;
+  } catch (e) {
+    outEl.innerHTML = `<span class="err">request failed: ${e.message}</span>`;
+  }
+}
+
+function copyCurl(name, safeId) {
+  const payload = document.getElementById(`in-${safeId}`).value.trim();
+  const cmd = `curl -X POST http://127.0.0.1:7000/api/v1/call/${name.replace(".", "/")} \\
+  -H 'content-type: application/json' \\
+  -d '${JSON.stringify({payload: JSON.parse(payload || "{}")})}'`;
+  navigator.clipboard.writeText(cmd);
+  const metaEl = document.getElementById(`meta-${safeId}`);
+  metaEl.innerHTML = `<span class="ok">curl copied to clipboard</span>`;
+  setTimeout(() => { metaEl.textContent = ""; }, 1800);
+}
+
+document.getElementById("q").addEventListener("input", render);
+document.getElementById("worker-filter").addEventListener("change", render);
+fetchCaps().catch(e => {
+  document.getElementById("caps").innerHTML =
+    `<div class="cap"><div class="err">could not load capabilities: ${e.message}</div></div>`;
+});
+</script>
+</body>
+</html>

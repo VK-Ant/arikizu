@@ -18,6 +18,8 @@ members = [
     "eval_worker",
     "video_worker",
     "agent_worker",
+    "custom_worker",
+    "pipeline_worker",
 ]
 
 [tool.uv.sources]

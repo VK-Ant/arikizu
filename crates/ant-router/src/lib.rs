@@ -42,8 +42,59 @@ pub struct CapabilityRegistry {
 
 impl CapabilityRegistry {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        Self::load_from_str(&content)
+        // Primary file.
+        let path_ref = path.as_ref();
+        let content = std::fs::read_to_string(path_ref)?;
+        let mut registry = Self::load_from_str(&content)?;
+
+        // Plug-in files: capabilities.d/*.toml next to the primary file.
+        // Each file is parsed as a map of capability blocks and merged into
+        // the registry. Duplicate capability names are rejected to make
+        // the override surface explicit.
+        if let Some(parent) = path_ref.parent() {
+            let plugin_dir = parent.join("capabilities.d");
+            if plugin_dir.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&plugin_dir) {
+                    let mut paths: Vec<_> = entries
+                        .flatten()
+                        .filter_map(|e| {
+                            let p = e.path();
+                            if p.extension().and_then(|s| s.to_str()) == Some("toml")
+                                && !p.file_name()
+                                    .and_then(|s| s.to_str())
+                                    .map(|s| s.starts_with('.') || s.starts_with('_'))
+                                    .unwrap_or(false)
+                            {
+                                Some(p)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    paths.sort();
+                    for p in paths {
+                        let extra = std::fs::read_to_string(&p)?;
+                        let extra_registry = Self::load_from_str(&extra)?;
+                        for (name, spec) in extra_registry.capabilities {
+                            if registry.capabilities.contains_key(&name) {
+                                return Err(ArikizuError::Serialization(format!(
+                                    "capabilities.d/{}: duplicate capability name `{}`",
+                                    p.file_name().and_then(|s| s.to_str()).unwrap_or("?"),
+                                    name,
+                                )));
+                            }
+                            registry.capabilities.insert(name, spec);
+                        }
+                        tracing::info!(
+                            file = ?p.file_name().and_then(|s| s.to_str()).unwrap_or("?"),
+                            total = registry.capabilities.len(),
+                            "merged plug-in capabilities"
+                        );
+                    }
+                }
+            }
+        }
+        Ok(registry)
     }
 
     pub fn load_from_str(s: &str) -> Result<Self> {
@@ -194,5 +245,93 @@ mod tests {
         // This may be a parse-level rejection (serde) OR a semantic one (empty name).
         let result = CapabilityRegistry::load_from_str(s);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn plugin_directory_merges_capabilities() {
+        // Write a main capabilities.toml and a capabilities.d/ with two
+        // user files; confirm all three capabilities are loaded.
+        let tmp = std::env::temp_dir().join(format!("ant_router_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::create_dir_all(tmp.join("capabilities.d")).unwrap();
+
+        let main_toml = r#"
+            [test_echo]
+            name = "test.echo"
+            worker = "test"
+            output = "string"
+        "#;
+        std::fs::write(tmp.join("capabilities.toml"), main_toml).unwrap();
+
+        std::fs::write(
+            tmp.join("capabilities.d").join("math.toml"),
+            r#"
+            [my_add]
+            name = "my.add"
+            worker = "custom"
+            output = "object"
+            "#,
+        ).unwrap();
+
+        std::fs::write(
+            tmp.join("capabilities.d").join("hello.toml"),
+            r#"
+            [hello_greet]
+            name = "hello.greet"
+            worker = "custom"
+            output = "object"
+            "#,
+        ).unwrap();
+
+        // Files starting with _ or . should be skipped.
+        std::fs::write(
+            tmp.join("capabilities.d").join("_draft.toml"),
+            r#"
+            [draft_cap]
+            name = "draft.one"
+            worker = "custom"
+            output = "object"
+            "#,
+        ).unwrap();
+
+        let registry = CapabilityRegistry::load(tmp.join("capabilities.toml")).unwrap();
+        assert!(registry.get("test.echo").is_ok(), "primary file should load");
+        assert!(registry.get("my.add").is_ok(), "math.toml should merge");
+        assert!(registry.get("hello.greet").is_ok(), "hello.toml should merge");
+        assert!(registry.get("draft.one").is_err(), "_draft.toml should be skipped");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn plugin_directory_rejects_duplicate_name() {
+        let tmp = std::env::temp_dir().join(format!("ant_router_test_dup_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::create_dir_all(tmp.join("capabilities.d")).unwrap();
+
+        std::fs::write(
+            tmp.join("capabilities.toml"),
+            r#"[test_echo]
+name = "test.echo"
+worker = "test"
+output = "string"
+"#,
+        ).unwrap();
+
+        std::fs::write(
+            tmp.join("capabilities.d").join("dup.toml"),
+            r#"[test_echo_dup]
+name = "test.echo"
+worker = "custom"
+output = "object"
+"#,
+        ).unwrap();
+
+        let result = CapabilityRegistry::load(tmp.join("capabilities.toml"));
+        assert!(result.is_err(), "collision with primary should be rejected");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

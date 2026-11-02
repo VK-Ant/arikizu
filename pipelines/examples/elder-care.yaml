@@ -1,0 +1,53 @@
+# Elder-care fall + inactivity watch.
+#
+# One home camera. Fires on live pose detection. If the person is lying
+# down for more than 30 seconds in a non-bedroom camera, send SMS.
+# No cloud, no stored video (only the detection event + a thumbnail
+# of the moment).
+
+name: elder_care_watch
+description: Alert family on a fall or long inactivity in a living space.
+
+trigger:
+  type: event
+  event: video.action_detected       # emitted by video_worker's live loop
+
+inputs:
+  camera: cam_living_room
+  stillness_secs: 30
+  recipient_phone: "+91XXXXXXXXXX"
+
+stages:
+  - name: filter
+    capability: pipeline.filter
+    when: >
+      {{trigger.camera == inputs.camera}}
+      and {{trigger.action in ['falling', 'sitting', 'head_down']}}
+
+  - name: confirm_still
+    capability: video.live_describe
+    when: filter.passed
+    inputs:
+      image_base64: "{{trigger.thumbnail_base64}}"
+      prompt: "Is the person lying on the floor, not on furniture? yes/no."
+
+  - name: wait_for_recovery
+    capability: pipeline.delay
+    when: "{{confirm_still.matches}} == true"
+    inputs:
+      seconds: "{{inputs.stillness_secs}}"
+
+  - name: check_still_down
+    capability: video.live_detect
+    when: wait_for_recovery.done
+    inputs:
+      camera: "{{inputs.camera}}"
+
+actions:
+  - type: sms
+    when: "{{check_still_down.action}} in ['falling', 'sitting']"
+    to: "{{inputs.recipient_phone}}"
+    body: "Alert from Arikizu: no movement on {{inputs.camera}} for {{inputs.stillness_secs}}s. Please check in."
+
+  - type: audit
+    message: "elder_care_watch: {{trigger.action}} on {{trigger.camera}} -> {{check_still_down.action}}"

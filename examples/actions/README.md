@@ -35,5 +35,5 @@ Replace the heuristics with your own domain knowledge.
 
 For actions that are hard to reduce to pose rules (yoga pose
 variations, specific sign-language signs, cooking actions, etc.),
-use the Video Studio's reference-image path instead; it routes through
+use the Vision's reference-image path instead; it routes through
 the VLM.

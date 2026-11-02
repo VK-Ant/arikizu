@@ -17,7 +17,7 @@ This document covers the full architecture: system layers, modules in the repo, 
 </p>
 
 One Rust binary that supervises eleven Python workers (including the
-Video Studio worker for multimodal action search). One HTTP surface for
+Vision worker for multimodal action search). One HTTP surface for
 every capability. One SQLite file for every event. One device, one
 install, no cloud.
 

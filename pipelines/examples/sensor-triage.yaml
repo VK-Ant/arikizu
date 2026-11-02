@@ -1,0 +1,62 @@
+# IoT sensor triage.
+#
+# Every minute, grab the last 15 minutes of a time-series signal
+# (temperature, vibration, pressure, whatever), run anomaly detection,
+# forecast the next 30 minutes, and escalate if either the current
+# reading OR the forecast crosses a threshold.
+
+name: sensor_triage
+description: Catch sensor drift early with anomaly + forecast + escalation.
+
+trigger:
+  type: schedule
+  cron: "0 * * * * *"            # every minute
+
+inputs:
+  signal_id: boiler_temp_c
+  warn_threshold: 85
+  critical_threshold: 95
+  lookback_minutes: 15
+  forecast_minutes: 30
+
+stages:
+  - name: load
+    capability: timeseries.load
+    inputs:
+      signal: "{{inputs.signal_id}}"
+      window_minutes: "{{inputs.lookback_minutes}}"
+
+  - name: anomaly
+    capability: timeseries.anomaly
+    inputs:
+      series: "{{load.series}}"
+      method: isolation_forest
+
+  - name: forecast
+    capability: timeseries.forecast
+    inputs:
+      series: "{{load.series}}"
+      horizon_minutes: "{{inputs.forecast_minutes}}"
+      model: tft           # or ets, lstm, prophet - whichever WavqWise picks
+
+  - name: classify
+    capability: pipeline.classify
+    inputs:
+      rules:
+        - level: critical
+          when: "{{forecast.max}} >= {{inputs.critical_threshold}} or {{load.last}} >= {{inputs.critical_threshold}}"
+        - level: warn
+          when: "{{anomaly.score}} > 0.8 or {{forecast.max}} >= {{inputs.warn_threshold}}"
+        - level: ok
+          when: default
+
+actions:
+  - type: webhook
+    when: "{{classify.level}} == 'critical'"
+    url: "${PAGERDUTY_URL}"
+    payload:
+      service: "{{inputs.signal_id}}"
+      message: "{{inputs.signal_id}} forecast {{forecast.max}} C in {{inputs.forecast_minutes}} min"
+
+  - type: audit
+    message: "sensor_triage: {{inputs.signal_id}} level={{classify.level}} last={{load.last}} forecast_max={{forecast.max}}"

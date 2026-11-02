@@ -412,15 +412,36 @@ def main() -> None:
             # MediaPipe may return a 2D or 3D array. Squeeze down to 2D.
             if cat_mask.ndim == 3:
                 cat_mask = cat_mask.squeeze(axis=-1 if cat_mask.shape[-1] == 1 else 0)
-            # magic_touch flags the clicked object as category 0; try both
-            # 0 and 1 conventions depending on model version.
-            inside = (cat_mask == 0).astype(np.uint8) * 255
-            if int(inside.sum()) == 0:
-                inside = (cat_mask == 1).astype(np.uint8) * 255
-            # Still nothing? The click may have hit background; use a
-            # dilated version so we return something useful.
-            if int(inside.sum()) == 0:
-                inside = (cat_mask > 0).astype(np.uint8) * 255
+
+            # Sample the category value AT the clicked pixel: whatever
+            # value sits under the click is the "inside" class. This
+            # replaces the old hard-coded 0/1 guess that could flip the
+            # mask inside-out and select the whole background.
+            mh, mw = cat_mask.shape[:2]
+            px = max(0, min(mw - 1, int(round(float(x) * mw))))
+            py = max(0, min(mh - 1, int(round(float(y) * mh))))
+            inside_value = int(cat_mask[py, px])
+            inside = (cat_mask == inside_value).astype(np.uint8) * 255
+
+            # Sanity guard: if the "inside" region fills > 70% of the
+            # frame it is almost certainly the background class (click
+            # landed on empty space). Flip to the smaller region, which
+            # is more likely to be the real object.
+            total_px = mh * mw
+            frac = int(inside.sum() // 255) / float(total_px)
+            if frac > 0.70:
+                # Pick the smallest non-zero category instead.
+                vals, counts = np.unique(cat_mask, return_counts=True)
+                candidates = [(int(v), int(c)) for v, c in zip(vals, counts) if int(c) < total_px * 0.70]
+                if candidates:
+                    best_val, _ = min(candidates, key=lambda vc: vc[1])
+                    inside = (cat_mask == best_val).astype(np.uint8) * 255
+                    inside_value = best_val
+                else:
+                    # Nothing distinct enough: return an empty mask with
+                    # an explanatory flag so the UI can tell the user.
+                    inside = np.zeros_like(inside)
+
             # Compute bbox of the mask
             ys, xs = np.where(inside > 0)
             if len(xs) == 0:
@@ -434,11 +455,14 @@ def main() -> None:
             buf = _io.BytesIO()
             Image.fromarray(inside, mode="L").save(buf, format="PNG")
             mask_b64 = _b64.b64encode(buf.getvalue()).decode("ascii")
+            pixel_count = int((inside > 0).sum())
             return {
                 "mask_png_base64": mask_b64,
                 "bbox": bbox,
                 "point_x": float(x), "point_y": float(y),
-                "mask_pixel_count": int((inside > 0).sum()),
+                "mask_pixel_count": pixel_count,
+                "mask_fill_fraction": round(pixel_count / float(mh * mw), 3),
+                "clicked_category": int(inside_value),
                 "backend": "magic_touch",
                 "ms": ms,
             }

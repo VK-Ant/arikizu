@@ -529,3 +529,48 @@ priority = 0
 # feedback.reject POST /api/v1/feedback/reject
 # feedback.annotate POST /api/v1/feedback/annotate
 # feedback.pending GET /api/v1/feedback/pending
+
+# ---------------------------------------------------------------------------
+# pipeline (YAML pipeline runtime)
+# ---------------------------------------------------------------------------
+[pipeline_list]
+name = "pipeline.list"
+worker = "pipeline"
+input = {}
+output = "object"
+timeout_ms = 2000
+
+[pipeline_run]
+name = "pipeline.run"
+worker = "pipeline"
+input = { name = "string", inputs = "object" }
+output = "object"
+timeout_ms = 300000
+
+[pipeline_reload]
+name = "pipeline.reload"
+worker = "pipeline"
+input = {}
+output = "object"
+timeout_ms = 5000
+
+[pipeline_filter]
+name = "pipeline.filter"
+worker = "pipeline"
+input = { when = "boolean" }
+output = "object"
+timeout_ms = 2000
+
+[pipeline_delay]
+name = "pipeline.delay"
+worker = "pipeline"
+input = { seconds = "number" }
+output = "object"
+timeout_ms = 3600000
+
+[pipeline_classify]
+name = "pipeline.classify"
+worker = "pipeline"
+input = { rules = "array" }
+output = "object"
+timeout_ms = 2000

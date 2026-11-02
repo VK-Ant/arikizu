@@ -55,6 +55,22 @@ workers:
     module: guard_worker
     args: [run, --package, guard-worker, python, -m, guard_worker]
     cwd: ./workers
+  # custom_worker scans ./custom/*.py and exposes every @worker.handler
+  # function as a capability. Drop a file in custom/ to add your own
+  # logic without editing anything else. See custom/README.md.
+  - name: custom
+    python: uv
+    module: custom_worker
+    args: [run, --package, custom-worker, python, -m, custom_worker]
+    cwd: ./workers
+  # pipeline_worker loads YAML pipelines from ./pipelines/*.yaml, runs
+  # scheduled triggers, and exposes pipeline.list / pipeline.run /
+  # pipeline.reload + the three meta-capabilities. See pipelines/README.md.
+  - name: pipeline
+    python: uv
+    module: pipeline_worker
+    args: [run, --package, pipeline-worker, python, -m, pipeline_worker]
+    cwd: ./workers
 
 # ---------------------------------------------------------------------------
 # Pipeline

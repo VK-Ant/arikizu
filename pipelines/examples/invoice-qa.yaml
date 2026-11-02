@@ -1,0 +1,54 @@
+# Invoice QA.
+#
+# Watches an incoming folder for new PDFs. For each PDF, extract text
+# and tables, run a totals-sanity check, and flag anything suspicious
+# for review. All on-device, no cloud.
+
+name: invoice_qa
+description: Extract and sanity-check invoices from an incoming folder.
+
+trigger:
+  type: event
+  path: /mnt/invoices/incoming/*.pdf
+
+inputs:
+  tolerance_pct: 0.01     # how far totals can drift before flagging
+
+stages:
+  - name: extract
+    capability: docs.extract
+    inputs:
+      file_path: "{{trigger.file_path}}"
+      with_tables: true
+
+  - name: redact
+    capability: docs.redact
+    inputs:
+      text: "{{extract.text}}"
+      pii_classes: [email, phone, ssn, credit_card]
+
+  - name: sanity
+    capability: reasoning.answer
+    inputs:
+      document: "{{redact.text}}"
+      question: |
+        Does the invoice's line-item total match the printed grand total?
+        Return JSON: {"ok": bool, "diff_pct": float, "reason": str}
+
+  - name: file_or_flag
+    capability: docs.save
+    inputs:
+      source_path: "{{trigger.file_path}}"
+      target_dir: >
+        {% if sanity.answer.ok %}
+          /mnt/invoices/clean
+        {% else %}
+          /mnt/invoices/flagged
+        {% endif %}
+      metadata:
+        diff_pct: "{{sanity.answer.diff_pct}}"
+        reason: "{{sanity.answer.reason}}"
+
+actions:
+  - type: audit
+    message: "invoice_qa: {{trigger.file_path}} -> {{file_or_flag.target_dir}} (diff={{sanity.answer.diff_pct}})"

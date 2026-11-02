@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="/demo/favicon.png">
-  <title>Arikizu Video Studio</title>
+  <title>Arikizu Vision</title>
   <style>
     :root { --bg:#ffffff; --fg:#0a0a0a; --muted:#666666; --accent:#ff6b1a; --card:#ffffff;
             --border:#e5e5e5; --pass:#2d8a4e; --wait:#c89520; --fail:#b84040;
@@ -45,6 +45,7 @@
     textarea{min-width:300px;min-height:60px;font-family:var(--mono);font-size:13px}
     button{background:var(--accent);color:#fff;border:none;padding:8px 16px;cursor:pointer}
     button.sec{background:var(--card);color:var(--fg);border:1px solid var(--border)}
+    button.sec.active{background:var(--accent);color:#ffffff;border-color:var(--accent)}
 
     /* Stage */
     .stage{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
@@ -92,7 +93,7 @@
   <header class="app-header">
     <a href="/demo/" class="home"><img src="/demo/logo.png" alt=""><strong>Arikizu</strong></a>
     <span class="sep">/</span>
-    <span class="page">Video Studio</span>
+    <span class="page">Vision</span>
   </header>
 
   <main>
@@ -218,10 +219,21 @@
     <!-- ========== SEGMENT PANEL ========== -->
     <section id="p-segment" class="panel" aria-selected="false">
       <div class="ctl">
+        <strong>Source:</strong>
+        <button id="seg-src-image" class="sec active">Image</button>
+        <button id="seg-src-live" class="sec">Live webcam</button>
+        <span style="color:var(--muted);font-size:12px;margin-left:12px">In <b>Live webcam</b> mode the video keeps running; click on the stream to pin an object. The mask re-computes every ~2 s and follows the pin.</span>
+      </div>
+      <div class="ctl" id="seg-image-controls">
         <strong>Load image to segment:</strong>
         <input id="seg-file" type="file" accept="image/*">
         <button id="seg-webcam-snap" class="sec">Snap from webcam</button>
         <span style="color:var(--muted);font-size:12px;margin-left:12px">Click anywhere on the image to segment that object.</span>
+      </div>
+      <div class="ctl" id="seg-live-controls" hidden>
+        <button id="seg-live-start">Start webcam</button>
+        <button id="seg-live-stop" class="sec" disabled>Stop</button>
+        <span style="color:var(--accent);font-size:12px;margin-left:12px;font-weight:600" id="seg-live-hint">Click the live feed to pin an object.</span>
       </div>
       <div class="ctl" style="margin-top:12px">
         <input id="seg-name" type="text" placeholder="segment name (e.g. refrigerator-dent)" style="min-width:260px;background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:6px 10px;border-radius:4px">
@@ -231,7 +243,8 @@
       </div>
       <div class="stage">
         <div class="stage-grid">
-          <div class="vwrap" style="cursor:crosshair">
+          <div class="vwrap" style="cursor:crosshair;position:relative">
+            <video id="seg-live-vid" autoplay playsinline muted hidden style="width:100%;height:auto;max-height:70vh;background:#000"></video>
             <canvas id="seg-canvas" style="width:100%;height:auto;max-height:70vh;background:#000"></canvas>
           </div>
           <aside class="hud">
@@ -239,6 +252,7 @@
             <div class="row"><span>point</span><span id="seg-point">—</span></div>
             <div class="row"><span>bbox</span><span id="seg-bbox">—</span></div>
             <div class="row"><span>mask pixels</span><span id="seg-pixels">—</span></div>
+            <div class="row"><span>fill %</span><span id="seg-fill">—</span></div>
             <div class="row"><span>ms</span><span id="seg-ms">—</span></div>
             <h4 style="margin-top:16px">Saved segments</h4>
             <div id="seg-saved-list" style="font-size:11px;font-family:var(--mono);color:var(--muted);max-height:200px;overflow-y:auto"></div>
@@ -930,6 +944,8 @@ document.getElementById("seg-webcam-snap").onclick = async () => {
 };
 
 segCanvas.addEventListener("click", async (e) => {
+  // In live mode the dedicated live-mode handler owns the clicks.
+  if (segLiveStream) return;
   if (!segSourceImage || !segSourceB64) return;
   const rect = segCanvas.getBoundingClientRect();
   // Account for canvas CSS scaling
@@ -950,13 +966,160 @@ segCanvas.addEventListener("click", async (e) => {
     document.getElementById("seg-bbox").textContent = r.bbox
       ? r.bbox.map(v => (v*100).toFixed(1) + "%").join(", ") : "—";
     document.getElementById("seg-pixels").textContent = r.mask_pixel_count || 0;
+    document.getElementById("seg-fill").textContent =
+      ((r.mask_fill_fraction || 0) * 100).toFixed(1) + "%";
     document.getElementById("seg-ms").textContent = r.ms;
     document.getElementById("seg-save").disabled = false;
-    document.getElementById("seg-status").textContent =
-      `segmented in ${r.ms} ms. Give it a name and click Save segment.`;
+    const fillPct = ((r.mask_fill_fraction || 0) * 100).toFixed(0);
+    document.getElementById("seg-status").innerHTML =
+      (r.mask_pixel_count === 0)
+        ? `<span style="color:var(--fail)">no object found at that spot — try clicking somewhere inside the object.</span>`
+        : `segmented in ${r.ms} ms (${fillPct}% of frame). Give it a name and Save, or click somewhere else.`;
   } catch (e) {
     document.getElementById("seg-status").textContent = "error: " + e.message;
   }
+});
+
+// ---------- Segment tab: Live webcam mode ----------
+let segLiveStream = null, segLiveTimer = null, segLivePin = null;
+let segLiveLastMask = null, segLiveLastSegT = 0;
+const SEG_LIVE_CADENCE_MS = 1500;
+const segLiveVid = document.getElementById("seg-live-vid");
+
+function setSegSource(mode) {
+  const isLive = mode === "live";
+  document.getElementById("seg-src-image").classList.toggle("active", !isLive);
+  document.getElementById("seg-src-live").classList.toggle("active", isLive);
+  document.getElementById("seg-image-controls").hidden = isLive;
+  document.getElementById("seg-live-controls").hidden = !isLive;
+  if (!isLive) {
+    // Switching back to image: stop any live stream.
+    stopSegLive();
+  }
+}
+document.getElementById("seg-src-image").onclick = () => setSegSource("image");
+document.getElementById("seg-src-live").onclick = () => setSegSource("live");
+
+async function startSegLive() {
+  if (segLiveStream) return;
+  try {
+    segLiveStream = await navigator.mediaDevices.getUserMedia({video: {width: 640, height: 480}});
+    segLiveVid.srcObject = segLiveStream;
+    await segLiveVid.play();
+    segCanvas.width = segLiveVid.videoWidth;
+    segCanvas.height = segLiveVid.videoHeight;
+    document.getElementById("seg-live-start").disabled = true;
+    document.getElementById("seg-live-stop").disabled = false;
+    document.getElementById("seg-status").textContent = "live webcam running — click on an object to pin it";
+
+    segLiveTimer = setInterval(() => {
+      if (!segLiveStream) return;
+      const ctx = segCanvas.getContext("2d");
+      ctx.drawImage(segLiveVid, 0, 0, segCanvas.width, segCanvas.height);
+      // Overlay the last mask on each frame so the user always sees SOMETHING
+      if (segLivePin && segLiveLastMask) {
+        drawLiveMaskOn(ctx, segLiveLastMask.mask, segLiveLastMask.bbox);
+      }
+      // Re-segment every ~1.5 s while a pin is placed
+      const now = performance.now();
+      if (segLivePin && (now - segLiveLastSegT >= SEG_LIVE_CADENCE_MS)) {
+        segLiveLastSegT = now;
+        const tmp = document.createElement("canvas");
+        tmp.width = segCanvas.width; tmp.height = segCanvas.height;
+        tmp.getContext("2d").drawImage(segLiveVid, 0, 0);
+        const b64 = tmp.toDataURL("image/jpeg", 0.7).split(",")[1];
+        callCap("video.segment_at_point", {
+          image_base64: b64, x: segLivePin.x, y: segLivePin.y,
+        }).then(r => {
+          if (r.error) {
+            document.getElementById("seg-status").innerHTML =
+              `<span style="color:var(--fail)">segment error: ${r.error}</span>`;
+            return;
+          }
+          if (r.mask_pixel_count > 0) {
+            segLiveLastMask = {mask: r.mask_png_base64, bbox: r.bbox};
+            segLastResult = r;
+            segSourceB64 = b64;    // so Save segment uses this frame
+            document.getElementById("seg-point").textContent =
+              `${(segLivePin.x*100).toFixed(1)}%, ${(segLivePin.y*100).toFixed(1)}%`;
+            document.getElementById("seg-bbox").textContent = r.bbox
+              ? r.bbox.map(v => (v*100).toFixed(1) + "%").join(", ") : "—";
+            document.getElementById("seg-pixels").textContent = r.mask_pixel_count;
+            document.getElementById("seg-fill").textContent =
+              ((r.mask_fill_fraction || 0) * 100).toFixed(1) + "%";
+            document.getElementById("seg-ms").textContent = r.ms;
+            document.getElementById("seg-save").disabled = false;
+          }
+        }).catch(() => {});
+      }
+      // Draw pin dot
+      if (segLivePin) {
+        ctx.fillStyle = "#ff6b1a";
+        ctx.beginPath();
+        ctx.arc(segLivePin.x * segCanvas.width, segLivePin.y * segCanvas.height, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }, 100);
+  } catch (e) {
+    document.getElementById("seg-status").textContent = "camera denied: " + e.message;
+  }
+}
+
+function stopSegLive() {
+  const s = segLiveStream;
+  segLiveStream = null;
+  if (segLiveTimer) { clearInterval(segLiveTimer); segLiveTimer = null; }
+  if (s) { try { s.getTracks().forEach(t => t.stop()); } catch (e) {} }
+  try { segLiveVid.srcObject = null; segLiveVid.pause(); } catch (e) {}
+  segLivePin = null; segLiveLastMask = null; segLiveLastSegT = 0;
+  document.getElementById("seg-live-start").disabled = false;
+  document.getElementById("seg-live-stop").disabled = true;
+  const ctx = segCanvas.getContext("2d");
+  if (ctx) ctx.clearRect(0, 0, segCanvas.width, segCanvas.height);
+}
+
+function drawLiveMaskOn(ctx, maskB64, bbox) {
+  if (!drawLiveMaskOn._img || drawLiveMaskOn._b64 !== maskB64) {
+    const im = new Image();
+    im.onload = () => { drawLiveMaskOn._img = im; drawLiveMaskOn._b64 = maskB64; };
+    im.src = "data:image/png;base64," + maskB64;
+    return;
+  }
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d");
+  octx.drawImage(drawLiveMaskOn._img, 0, 0, W, H);
+  octx.globalCompositeOperation = "source-in";
+  octx.fillStyle = "#ff6b1a";
+  octx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 0.5;
+  ctx.drawImage(off, 0, 0);
+  ctx.globalAlpha = 1.0;
+  if (bbox) {
+    ctx.strokeStyle = "#ff6b1a";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bbox[0] * W, bbox[1] * H, (bbox[2] - bbox[0]) * W, (bbox[3] - bbox[1]) * H);
+  }
+}
+
+document.getElementById("seg-live-start").onclick = startSegLive;
+document.getElementById("seg-live-stop").onclick = stopSegLive;
+
+// Click on canvas while in live mode places the pin
+segCanvas.addEventListener("click", (e) => {
+  if (!segLiveStream) return;    // only intercept in live mode
+  const rect = segCanvas.getBoundingClientRect();
+  const nx = (e.clientX - rect.left) / rect.width;
+  const ny = (e.clientY - rect.top) / rect.height;
+  segLivePin = {x: nx, y: ny};
+  segLiveLastMask = null;
+  segLiveLastSegT = 0;    // force immediate re-segment
+  document.getElementById("seg-status").textContent =
+    `pin at ${(nx*100).toFixed(0)}%, ${(ny*100).toFixed(0)}% — re-segmenting every 1.5 s`;
 });
 
 document.getElementById("seg-save").onclick = async () => {

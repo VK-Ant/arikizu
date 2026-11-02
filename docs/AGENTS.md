@@ -2,10 +2,40 @@
 
 Everything about Arikizu as an agentic platform: building custom agents, exposing capabilities over MCP to any external AI agent, the Responsible AI governance model, and how to customize the stack for your own org or hardware.
 
+- [How to build custom logic (TL;DR)](#how-to-build-custom-logic-tldr)
 - [Part 1 — Custom agents](#part-1--custom-agents)
 - [Part 2 — MCP server](#part-2--mcp-server)
 - [Part 3 — Governance and Responsible AI](#part-3--governance-and-responsible-ai)
 - [Part 4 — Customization guide](#part-4--customization-guide)
+
+---
+
+## How to build custom logic (TL;DR)
+
+Arikizu gives you three ways to add your own logic, in order of effort:
+
+| You want to | Use | Where it lives |
+|-------------|-----|----------------|
+| Chain existing capabilities in order (detect → reason → alert) | **YAML pipeline** | `pipelines/*.yaml` |
+| Give an LLM the capabilities as tools and let it decide | **JSON agent** | `examples/agents/*.json`, Agents UI |
+| Add a new ML model, custom algorithm, or external integration | **Python worker** | `workers/<name>_worker/` |
+
+**Start with a pipeline.** Most "do X, then Y, then Z" problems don't
+need Python. The grammar, triggers (schedule / event / file-watch /
+webhook), and five working examples live in
+[`../pipelines/README.md`](../pipelines/README.md). Copy one, rename
+it, change the camera path, done.
+
+**Reach for an agent** when the order of steps depends on what the data
+looks like. Agents reason; pipelines execute.
+
+**Write a worker** only when you need something neither YAML nor an
+agent can do: a new vision model, a new signal algorithm, a database
+driver, a custom protocol. Workers are standalone Python processes
+over the Arikizu Worker SDK.
+
+All three go through the same policy enforcement and audit log. Nothing
+bypasses governance.
 
 ---
 
@@ -154,7 +184,7 @@ chain calls: detect → check memory → answer.
 
 ---
 
-## Agent Studio
+## Agents
 
 The browser demo at `/demo/agent_studio.html` is the full management UI:
 
@@ -192,7 +222,7 @@ Ready-to-use config snippets for popular clients are in
 
 ## Why
 
-- The Agent Studio inside Arikizu is for custom agents that LIVE in
+- The Agents inside Arikizu is for custom agents that LIVE in
   Arikizu.
 - The MCP server is for agents that live ELSEWHERE and want to use
   Arikizu's local-first perception, documents, reasoning, time series,
@@ -839,7 +869,7 @@ rebuilding.
 
 ---
 
-## 8. Customize the Video Studio
+## 8. Customize the Vision
 
 The video worker is the most composable of the Arikizu workers because it
 plugs several things together. Four common customizations:

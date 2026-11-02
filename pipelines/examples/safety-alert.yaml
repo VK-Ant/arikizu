@@ -1,0 +1,59 @@
+# Factory floor safety alert.
+#
+# Watches one camera every 5 seconds. If a person is detected without a
+# hard hat, run a VLM check to confirm, then post to Slack. Human
+# approval required before the Slack post goes out.
+#
+# To run: drop this file in pipelines/, add `pipelines: {dir: ./pipelines}`
+# to your arikizu.yaml, restart. Or load live:
+#   arikizu pipeline load pipelines/examples/safety-alert.yaml
+
+name: safety_alert
+description: Alert the shift lead when someone enters the floor without PPE.
+
+trigger:
+  type: schedule
+  cron: "*/5 * * * * *"      # every 5 seconds (6-field cron with seconds)
+
+inputs:
+  camera: cam_factory_01
+  confidence_floor: 0.6
+
+stages:
+  - name: snapshot
+    capability: vision.snapshot
+    inputs:
+      device: "{{inputs.camera}}"
+
+  - name: detect
+    capability: vision.detect
+    inputs:
+      image_base64: "{{snapshot.image_base64}}"
+      confidence: "{{inputs.confidence_floor}}"
+      classes: [person]
+
+  - name: ppe_check
+    capability: video.live_describe
+    when: "{{detect.count}} > 0"
+    inputs:
+      image_base64: "{{snapshot.image_base64}}"
+      prompt: "Is every person in this image wearing a hard hat? Answer yes or no."
+
+  - name: human_gate
+    capability: feedback.approve
+    when: "{{ppe_check.matches}} == false"
+    inputs:
+      summary: "{{detect.count}} person(s) detected without a hard hat on {{inputs.camera}}"
+      approver_role: shift_lead
+      ttl_seconds: 120
+
+actions:
+  - type: webhook
+    when: "{{human_gate.approved}} == true"
+    url: "${SLACK_WEBHOOK_URL}"
+    method: POST
+    payload:
+      text: ":warning: Safety alert: {{detect.count}} person(s) on {{inputs.camera}} without hard hat. Approved by {{human_gate.approver}}."
+
+  - type: audit
+    message: "safety_alert fired: detected={{detect.count}}, violation={{ppe_check.matches == false}}, posted={{human_gate.approved}}"

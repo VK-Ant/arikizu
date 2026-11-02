@@ -154,7 +154,7 @@ Do these in order. Don't skip. Each step takes 1-10 minutes.
 
 ```bash
 cd ~
-unzip -o arikizu-v1.8.4.zip
+unzip -o arikizu-v1.9.0.zip
 cd ~/arikizu
 ```
 
@@ -286,7 +286,7 @@ sleep 2
 make run
 ```
 
-The Video Studio banner at the top of the page will show a red
+The Vision banner at the top of the page will show a red
 `MediaPipe NOT INSTALLED` warning with the fix command until this is
 actually working. If the warning disappears and detections start
 showing, you are done.
@@ -302,14 +302,14 @@ curl -sS -X POST http://127.0.0.1:7000/api/v1/call/video/backends \
 import failed; the `perception.mediapipe_error` field tells you why
 (usually a missing system lib like `libgl1`).
 
-### "Agent Studio gives generic / wrong answers"
+### "Agents gives generic / wrong answers"
 
 The default reasoning model is SmolLM2-360M (230 MB). That is a 360-
 million-parameter model: enough for canned Q&A, too small to follow a
 system prompt or emit structured tool calls. The agent's answers will
 look generic or wrong.
 
-For Agent Studio to actually work, download a properly-sized LLM:
+For Agents to actually work, download a properly-sized LLM:
 
 ```bash
 scripts/download-reasoning-llm.sh --size 1.5b     # Qwen2.5-1.5B ~0.9 GB
@@ -318,7 +318,7 @@ pkill -9 -f arikizu && make run
 
 The script tries bartowski's HuggingFace mirror first (reliable), then
 falls back to the official Qwen repo. The reasoning worker auto-detects
-the bigger model on restart. The Agent Studio header shows which LLM is
+the bigger model on restart. The Agents header shows which LLM is
 in use; if it says "too small for agent chat", that is the signal.
 
 Sizes available: `--size 0.5b` (400 MB), `1.5b` (0.9 GB, recommended),
@@ -337,13 +337,13 @@ end. Options: `--skip-defaults`, `--skip-video`, `--skip-llm`,
 
 ---
 
-## Enable the full stack (Video Studio + Agent Studio + MCP)
+## Enable the full stack (Vision + Agents + MCP)
 
 The 5-minute quickstart runs the base workers (vision, audio, docs,
 reasoning, timeseries, memory, guard, eval, test). The newer workers
 and the MCP server are opt-in because they have heavier dependencies.
 
-### Video Studio
+### Vision
 
 Needs MediaPipe LiteRT and optionally llama-cpp-python for the VLM.
 
@@ -366,7 +366,7 @@ Open `http://127.0.0.1:7000/demo/video_studio.html`. The device banner
 at the top tells you which models were loaded and what FPS to expect
 on your hardware.
 
-### Agent Studio
+### Agents
 
 No extra deps; the worker is in the base install. Just make sure the
 reasoning worker has a working backend (local GGUF, HTTP endpoint, or
@@ -447,7 +447,7 @@ Full demo walkthrough with screenshots and expected outputs:
 
 ---
 
-## Video Studio: multimodal action search
+## Vision: multimodal action search
 
 Upload a clip or open your webcam. Give the system a text prompt, a reference
 image, or nothing at all. Get back a timestamped list of actions, who and what
@@ -485,7 +485,7 @@ Open [`http://127.0.0.1:7000/demo/video_studio.html`](http://127.0.0.1:7000/demo
 Two ways to build on top of Arikizu's capabilities, both governed by
 the same policy and audit layer.
 
-**Agent Studio.** Create your own chatbots inside Arikizu. Give each
+**Agents.** Create your own chatbots inside Arikizu. Give each
 agent a name, a system prompt, and a policy (which capabilities it may
 call directly, which require human approval, which are refused). The
 agent runs in `agent_worker`, talks via the local reasoning worker,
@@ -519,23 +519,91 @@ parts you don't need, add parts you do, ship your own product on top.
 No attribution required for the code; the bundled model files keep
 their own upstream licenses (see `models/NOTICE.md`).
 
-Ready-to-use starting points live in [`examples/`](examples/):
+### Add your own capability (two files, no scaffolding)
+
+The built-in demos (vision, audio, docs, timeseries, agents) all go
+through the same path your custom code uses. Drop in two files, your
+capability behaves identically to the built-ins — same HTTP API, same
+policy enforcement, same audit log.
+
+**File 1 — Python handler** in `custom/`:
+
+```python
+# custom/my_math.py
+from arikizu_worker import Worker
+worker = Worker.current()
+
+@worker.handler("my.add")
+def add(a: float, b: float) -> dict:
+    return {"result": a + b}
+```
+
+**File 2 — Registry entry** in `capabilities.d/`:
+
+```toml
+# capabilities.d/my_math.toml
+[my_add]
+name = "my.add"
+worker = "custom"
+input = { a = "number", b = "number" }
+output = "object"
+timeout_ms = 5000
+```
+
+**Save the file — that's it.** The custom worker watches `custom/`
+and hot-reloads in ~1 second. No restart. Your capability is live
+at `POST /api/v1/call/my/add`. It's visible
+to the HTTP API, to agents, to YAML pipelines, and to external MCP
+clients. A working example (`custom/hello.py` + `capabilities.d/hello.toml`)
+ships in the box. See [`custom/README.md`](custom/README.md) for the
+full guide.
+
+**Discover every capability:** open [`/demo/catalog.html`](http://127.0.0.1:7000/demo/catalog.html).
+Lists all capabilities (built-in + yours), shows each one's input/output
+schema, and gives a one-click Try form to call it live from the browser.
+Also a "Copy curl" button for the terminal.
+
+### Build your own demo page
+
+**No framework lock-in.** Pick HTML, Streamlit, Gradio, React,
+anything — Arikizu's HTTP API is the only contract.
+
+**HTML — ships in the box.** Drop a file in `demo/web/user/`, add it
+to `manifest.json`, reload. It auto-appears on the Demos page.
+
+```bash
+cp demo/web/user/hello.html demo/web/user/my_demo.html
+# edit my_demo.html, then add an entry to demo/web/user/manifest.json
+# open http://127.0.0.1:7000/demo/ -> your demo card is there
+```
+
+**Any Python UI framework** — Streamlit, Gradio, Dash, Panel, Flask,
+FastAPI. Each capability call is one `requests.post`. See
+[`examples/python-apps/`](examples/python-apps/) for the pattern.
+
+**YAML pipeline — no code at all.** Chain existing capabilities in a
+`.yaml` file. See [`pipelines/`](pipelines/).
+
+### Starting points in `examples/`
 
 - [`examples/agents/`](examples/agents/) — five ready-to-import JSON
   agents (Safety Inspector, Elder Care Companion, Document Reviewer,
   Sensor Triage, Retail Floor Watcher). One `curl` or one click in the
-  Agent Studio imports all five.
+  Agents UI imports all five.
 - [`examples/actions/`](examples/actions/) — custom action rules you
   can drop into `video_worker/actions.py` (squatting, reaching_up,
   looking_down, hugging, thumbs_up). Each is one function, no training.
 - [`examples/mcp-configs/`](examples/mcp-configs/) — `.mcp.json`
   snippets for popular MCP-compatible agent clients.
-- [`demo/web/_template.html`](demo/web/_template.html) —
-  blank HTML template with the shared Arikizu header and palette; copy
-  and fill in to start your own demo page in one step.
+- [`examples/python-apps/`](examples/python-apps/) — Streamlit and
+  Gradio apps that call Arikizu over HTTP.
+- [`demo/web/user/hello.html`](demo/web/user/hello.html) — HTML
+  starter demo that lands on the Demos page via manifest.
+- [`demo/web/_template.html`](demo/web/_template.html) — blank HTML
+  template with the shared Arikizu header and palette.
 
 See [`examples/README.md`](examples/README.md) for the full list and
-the one-liner commands to import each one into a running Arikizu.
+one-liner commands to import each into a running Arikizu.
 
 ---
 
@@ -727,8 +795,8 @@ flowchart TB
         W4["Reasoning<br/>local LLM"]
         W5["Timeseries<br/>WavqWise"]
         W6["Guard<br/>AntGuard"]
-        W7["<b>Video Studio</b><br/>multimodal action search"]
-        W8["<b>Agent Studio</b><br/>custom agents + policy"]
+        W7["<b>Vision</b><br/>multimodal action search"]
+        W8["<b>Agents</b><br/>custom agents + policy"]
     end
 
     FB["<b>Governance</b><br/>policy · audit · approvals · feedback<br/>golden set"]
@@ -789,9 +857,10 @@ Six consolidated docs. Each one has internal sections (`## Part 1`, `## Part 2`,
 | [`docs/WHY.md`](docs/WHY.md) | Why Arikizu exists, who it's for, why we call it an OS |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System layers, module index, how it runs on hardware, spec pointer |
 | [`docs/SETUP.md`](docs/SETUP.md) | Setup for every device (Pi, Jetson, Mac, Linux, WSL), install tiers, model catalog |
-| [`docs/DEMOS.md`](docs/DEMOS.md) | Demo walkthrough, Pi vision tutorial, Video Studio test checklist |
+| [`docs/DEMOS.md`](docs/DEMOS.md) | Demo walkthrough, Pi vision tutorial, Vision test checklist |
 | [`docs/AGENTS.md`](docs/AGENTS.md) | Custom agents, MCP server for external tools, governance, customization |
 | [`docs/CHANGES.md`](docs/CHANGES.md) | Changelog |
+| [`pipelines/README.md`](pipelines/README.md) | **How to build custom logic in YAML** (triggers, stages, actions, 5 examples) |
 
 **Project hygiene**
 

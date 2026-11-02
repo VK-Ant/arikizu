@@ -532,7 +532,7 @@ that is written.
 
 Not all devices are equal. Set expectations correctly.
 
-| Device               | Vision | Audio    | Reasoning   | Video Studio | Overall             |
+| Device               | Vision | Audio    | Reasoning   | Vision | Overall             |
 | -------------------- | ------ | -------- | ----------- | ------------ | ------------------- |
 | Pi 4 (4 GB)          | 2-3 FPS CPU | VAD realtime, the ASR model 5x slow | LAN gateway only | 2-3 FPS, rule-based actions only (no VLM) | Entry level; proves it all works |
 | Pi 5 (8 GB)          | 5-7 FPS CPU | VAD realtime, the ASR model 2x slow | Small LLM OK  | 7-9 FPS, rule-based only | Comfortable for one line / room |
@@ -1209,9 +1209,9 @@ Keep source + converted + sidecar `.json` manifest with SHA-256 in `models/`.
 
 ---
 
-## Video Studio models (new in v1.6.0)
+## Vision models (new in v1.6.0)
 
-The Video Studio worker uses six model families, all quantized and
+The Vision worker uses six model families, all quantized and
 downloaded on first use into `models/`.
 
 | Key | File | Size | Format | Device fit |
