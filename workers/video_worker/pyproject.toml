@@ -2,22 +2,22 @@
 name = "video-worker"
 version = "0.0.1"
 description = "Arikizu video intelligence worker: multimodal action recognition, pose, scene parsing, VLM action search"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "arikizu-worker-sdk",
-    "numpy>=1.26.0",
+    "numpy>=1.26.0,<2.0",
     "pillow>=10.0.0",
     "opencv-python-headless>=4.10,<5.0",
     "onnxruntime>=1.17.0",
+    # MediaPipe is REQUIRED (not optional) because without it the Video
+    # Studio demo is a blank page. Pinned to a version with Python 3.12
+    # wheels that are known-good on WSL / Ubuntu / Mac Apple Silicon.
+    "mediapipe>=0.10.14,<0.11",
 ]
 
-# MediaPipe and llama-cpp-python are OPTIONAL. The worker starts without them
-# and reports the exact missing dep in video.backends. This matches audio
-# and reasoning worker patterns.
-#
-# To get the full stack:
-#   cd workers && uv add mediapipe>=0.10.14 --package video-worker
-#   cd workers && uv add llama-cpp-python>=0.3.0 --package video-worker
+# Optional (only needed for the VLM-based open-vocabulary action search).
+# Install when the hardware can run a 3B VLM:
+#   cd workers && uv add llama-cpp-python --package video-worker
 
 [project.scripts]
 video-worker = "video_worker.__main__:main"

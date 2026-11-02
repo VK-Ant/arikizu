@@ -148,6 +148,32 @@ missing model file; `scripts/download-default-models.sh` fixes that.
 
 ---
 
+## One-command install (recommended)
+
+Instead of running each step by hand, use the single installer:
+
+```bash
+cd ~/arikizu
+scripts/install-everything.sh --with-vlm --llm-size 1.5b
+```
+
+That installs system libraries, syncs the Python workers (MediaPipe is
+now a required dep, no separate `uv add` needed), downloads every
+model, and verifies MediaPipe actually imports. Each step is
+independent; the summary tells you if anything failed and how to retry.
+
+Then:
+
+```bash
+make build
+pkill -9 -f arikizu && make run
+```
+
+Open `http://127.0.0.1:7000/demo/`. Diagnostics panel should be all
+green.
+
+---
+
 ## Two things that catch everyone first time
 
 ### "Video Studio shows unknown / 0 objects / 0 people"
@@ -224,16 +250,28 @@ look generic or wrong.
 For Agent Studio to actually work, download a properly-sized LLM:
 
 ```bash
-scripts/download-reasoning-llm.sh --size 1.5b     # Qwen2.5-1.5B ~1.0 GB
-pkill -f arikizu && make run
+scripts/download-reasoning-llm.sh --size 1.5b     # Qwen2.5-1.5B ~0.9 GB
+pkill -9 -f arikizu && make run
 ```
 
-The reasoning worker auto-detects the bigger model on restart. The
-Agent Studio header shows which LLM is in use; if it says
-"too small for agent chat", that is the signal.
+The script tries bartowski's HuggingFace mirror first (reliable), then
+falls back to the official Qwen repo. The reasoning worker auto-detects
+the bigger model on restart. The Agent Studio header shows which LLM is
+in use; if it says "too small for agent chat", that is the signal.
 
-Sizes available: `--size 0.5b` (400 MB), `1.5b` (1 GB, recommended),
+Sizes available: `--size 0.5b` (400 MB), `1.5b` (0.9 GB, recommended),
 `3b` (2 GB), `7b` (4.4 GB). Pick what fits your device.
+
+### Download everything in one go
+
+```bash
+scripts/download-all.sh --with-vlm --llm-size 1.5b
+```
+
+That runs all four download steps in order (default models, video
+perception, reasoning LLM, VLM) and reports pass/fail per step at the
+end. Options: `--skip-defaults`, `--skip-video`, `--skip-llm`,
+`--llm-size 3b` (etc).
 
 ---
 
