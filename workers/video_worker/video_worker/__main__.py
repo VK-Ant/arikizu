@@ -392,20 +392,207 @@ def main() -> None:
     # -----------------------------------------------------------------------
 
     @worker.handler("video.segment_at_point")
-    def segment_at_point(image_base64: str = "", x: float = 0.5, y: float = 0.5) -> dict[str, Any]:
+    def segment_at_point(image_base64: str = "", x: float = 0.5, y: float = 0.5,
+                         backend: str = "auto") -> dict[str, Any]:
         """Click-to-segment: given a frame and a normalized (x, y) point in
         [0,1], return a binary mask + bounding box for whatever is under
-        that point. Uses MediaPipe magic_touch.
+        that point.
 
-        Returns {mask_png_base64, bbox, point_x, point_y, backend, ms}.
-        The mask is a PNG so the browser can draw it as an overlay or
-        save it alongside the original frame.
+        backend:
+          "auto"       - try SegFormer semantic segmentation first (way
+                         more reliable for complex indoor scenes), fall
+                         back to MediaPipe magic_touch if SegFormer is
+                         unavailable. Default.
+          "segformer"  - force SegFormer semantic segmentation.
+          "magic_touch" - force MediaPipe interactive segmenter.
+
+        SegFormer path: runs scene parse, looks up the semantic class at
+        the click point, returns just that class's mask. If the user
+        clicked on a person, this returns the person region, not the
+        whole image.
+
+        Returns {mask_png_base64, bbox, point_x, point_y, class_name,
+                 backend, ms}.
         """
         import base64 as _b64
         import io as _io
         import time
+
         if not image_base64:
             return {"error": "image_base64 required"}
+
+        # -------------------------------------------------------------
+        # SegFormer path (default): semantic segmentation gives reliable
+        # person/wall/door/etc classes. Click point -> majority class in
+        # a 5x5 window -> return just that class's mask.
+        # -------------------------------------------------------------
+        if backend in ("auto", "segformer", "combined"):
+            try:
+                import numpy as np
+                from PIL import Image
+                import onnxruntime as ort
+
+                sf_model = models.ensure("segformer_b0_int8")
+                raw = _b64.b64decode(image_base64)
+                pil = Image.open(_io.BytesIO(raw)).convert("RGB")
+                orig_w, orig_h = pil.size
+                img = pil.resize((512, 512), Image.BILINEAR)
+                arr = np.asarray(img, dtype=np.float32) / 255.0
+                mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+                std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+                arr = ((arr - mean) / std).transpose(2, 0, 1)[None, :, :, :]
+
+                available = set(ort.get_available_providers())
+                preference = ["TensorrtExecutionProvider", "CUDAExecutionProvider",
+                              "CoreMLExecutionProvider", "OpenVINOExecutionProvider",
+                              "CPUExecutionProvider"]
+                providers = [p for p in preference if p in available] or ["CPUExecutionProvider"]
+
+                t = time.perf_counter()
+                sess = ort.InferenceSession(str(sf_model), providers=providers)
+                in_name = sess.get_inputs()[0].name
+                logits = sess.run(None, {in_name: arr})[0]
+                cls_map = np.argmax(logits[0], axis=0).astype(np.int32)
+
+                cls_pil = Image.fromarray(cls_map.astype(np.uint8), mode="L")
+                cls_pil = cls_pil.resize((orig_w, orig_h), Image.NEAREST)
+                cls_full = np.asarray(cls_pil)
+
+                # Majority vote in 5x5 window around click.
+                px = max(0, min(orig_w - 1, int(round(float(x) * orig_w))))
+                py = max(0, min(orig_h - 1, int(round(float(y) * orig_h))))
+                y_lo, y_hi = max(0, py - 2), min(orig_h, py + 3)
+                x_lo, x_hi = max(0, px - 2), min(orig_w, px + 3)
+                neigh = cls_full[y_lo:y_hi, x_lo:x_hi].flatten()
+                uniq_n, cnt_n = np.unique(neigh, return_counts=True)
+                clicked_class = int(uniq_n[int(np.argmax(cnt_n))])
+
+                mask = (cls_full == clicked_class).astype(np.uint8) * 255
+                ys, xs = np.where(mask > 0)
+                if len(xs) == 0:
+                    return {"error": "no object at that point",
+                            "backend": "segformer", "class_name": "unknown"}
+
+                # Try MediaPipe magic_touch to REFINE the edges, if available.
+                # magic_touch gives tighter boundaries; SegFormer gives the
+                # right class. Combine: keep magic_touch's result only
+                # where it falls INSIDE SegFormer's class region, so we get
+                # fine edges but still only the clicked object.
+                refined = False
+                active_backend = "segformer"
+                if backend in ("auto", "combined") and perception_mod.MP_OK:
+                    try:
+                        import mediapipe as mp
+                        from mediapipe.tasks.python import BaseOptions, vision as mp_vision
+                        from mediapipe.tasks.python.components.containers import keypoint as kp_mod
+
+                        mt_model_path = models.ensure("magic_touch")
+                        mt_opts = mp_vision.InteractiveSegmenterOptions(
+                            base_options=BaseOptions(model_asset_path=str(mt_model_path),
+                                                     delegate=BaseOptions.Delegate.CPU),
+                            output_category_mask=True,
+                        )
+                        rgb_arr = np.asarray(pil)
+                        mt_mask = None
+                        with mp_vision.InteractiveSegmenter.create_from_options(mt_opts) as segmenter:
+                            mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_arr)
+                            roi = mp_vision.InteractiveSegmenterRegionOfInterest(
+                                format=mp_vision.InteractiveSegmenterRegionOfInterest.Format.KEYPOINT,
+                                keypoint=kp_mod.NormalizedKeypoint(x=float(x), y=float(y)),
+                            )
+                            seg_result = segmenter.segment(mp_img, roi)
+                        mt_raw = seg_result.category_mask.numpy_view()
+                        if mt_raw.ndim == 3:
+                            mt_raw = mt_raw.squeeze(
+                                axis=-1 if mt_raw.shape[-1] == 1 else 0)
+                        # Sample the clicked class in the magic_touch mask too
+                        mt_clicked = int(mt_raw[py, px])
+                        mt_mask = (mt_raw == mt_clicked).astype(np.uint8) * 255
+
+                        # Guard against magic_touch returning garbage (near-whole
+                        # image). If so, skip the refinement.
+                        mt_frac = int(mt_mask.sum() // 255) / float(orig_w * orig_h)
+                        if 0.0 < mt_frac < 0.80:
+                            # Intersect: tighter edges, but ONLY inside the
+                            # SegFormer class region. This is the "combined"
+                            # mask VK asked for.
+                            combined = ((mt_mask > 0) & (mask > 0)).astype(np.uint8) * 255
+                            # Only accept if the combined mask retains a
+                            # reasonable portion of the semantic mask.
+                            semantic_px = int(mask.sum() // 255)
+                            combined_px = int(combined.sum() // 255)
+                            if semantic_px > 0 and combined_px / float(semantic_px) > 0.25:
+                                mask = combined
+                                refined = True
+                                active_backend = "combined"
+                    except Exception:
+                        # Refinement is best-effort; keep the SegFormer mask.
+                        pass
+
+                # Recompute bbox from the (possibly refined) mask.
+                ys, xs = np.where(mask > 0)
+                if len(xs) == 0:
+                    return {"error": "no object after refinement",
+                            "backend": active_backend, "class_name": "unknown"}
+                x0_px, y0_px = int(xs.min()), int(ys.min())
+                x1_px, y1_px = int(xs.max()), int(ys.max())
+                bbox = [x0_px / orig_w, y0_px / orig_h,
+                        x1_px / orig_w, y1_px / orig_h]
+
+                # Full-frame mask PNG (for canvas overlay).
+                buf_full = _io.BytesIO()
+                Image.fromarray(mask, mode="L").save(buf_full, format="PNG")
+                mask_b64 = _b64.b64encode(buf_full.getvalue()).decode("ascii")
+
+                # ---- Cropped RGBA PNG: the segmented part ONLY, cut to
+                # bbox with transparent background. This is what VK wants
+                # to download: a tight PNG that is just the person / wall /
+                # door, no extra pixels around it. ----
+                pad = 4
+                cx0 = max(0, x0_px - pad)
+                cy0 = max(0, y0_px - pad)
+                cx1 = min(orig_w, x1_px + 1 + pad)
+                cy1 = min(orig_h, y1_px + 1 + pad)
+                rgb_full = np.asarray(pil)
+                crop_rgb = rgb_full[cy0:cy1, cx0:cx1]
+                crop_alpha = mask[cy0:cy1, cx0:cx1]
+                rgba = np.dstack([crop_rgb, crop_alpha])
+                buf_crop = _io.BytesIO()
+                Image.fromarray(rgba, mode="RGBA").save(buf_crop, format="PNG", optimize=True)
+                crop_b64 = _b64.b64encode(buf_crop.getvalue()).decode("ascii")
+
+                ms = round((time.perf_counter() - t) * 1000, 1)
+                pixel_count = int((mask > 0).sum())
+                class_name = (_ADE20K_NAMES[clicked_class]
+                              if 0 <= clicked_class < len(_ADE20K_NAMES)
+                              else f"class_{clicked_class}")
+                return {
+                    "mask_png_base64": mask_b64,
+                    "crop_png_base64": crop_b64,
+                    "crop_width": cx1 - cx0,
+                    "crop_height": cy1 - cy0,
+                    "crop_bbox_px": [cx0, cy0, cx1, cy1],
+                    "bbox": bbox,
+                    "point_x": float(x), "point_y": float(y),
+                    "mask_pixel_count": pixel_count,
+                    "mask_fill_fraction": round(pixel_count / float(orig_w * orig_h), 3),
+                    "class_name": class_name,
+                    "class_id": clicked_class,
+                    "backend": active_backend,
+                    "refined_by_magic_touch": refined,
+                    "provider": sess.get_providers()[0] if sess.get_providers() else "unknown",
+                    "ms": ms,
+                }
+            except Exception as e:
+                if backend in ("segformer", "combined"):
+                    return {"error": f"segmentation failed: {e}",
+                            "backend": "inference-failed"}
+                # auto: fall through to magic_touch
+                logger_fallback = e
+
+        # -------------------------------------------------------------
+        # MediaPipe magic_touch fallback (only when SegFormer unavailable)
+        # -------------------------------------------------------------
         try:
             rgb, _raw = _b64_to_rgb_np(image_base64)
         except Exception as e:
@@ -499,13 +686,39 @@ def main() -> None:
             Image.fromarray(inside, mode="L").save(buf, format="PNG")
             mask_b64 = _b64.b64encode(buf.getvalue()).decode("ascii")
             pixel_count = int((inside > 0).sum())
+            # Cropped RGBA PNG for download
+            crop_b64 = None
+            crop_w_px = 0
+            crop_h_px = 0
+            crop_box = None
+            if bbox is not None and pixel_count > 0:
+                pad = 4
+                h_full, w_full = inside.shape[:2]
+                cx0 = max(0, int(xs.min()) - pad)
+                cy0 = max(0, int(ys.min()) - pad)
+                cx1 = min(w_full, int(xs.max()) + 1 + pad)
+                cy1 = min(h_full, int(ys.max()) + 1 + pad)
+                crop_rgb = rgb[cy0:cy1, cx0:cx1]
+                crop_alpha = inside[cy0:cy1, cx0:cx1]
+                rgba = np.dstack([crop_rgb, crop_alpha])
+                buf_crop = _io.BytesIO()
+                Image.fromarray(rgba, mode="RGBA").save(buf_crop, format="PNG", optimize=True)
+                crop_b64 = _b64.b64encode(buf_crop.getvalue()).decode("ascii")
+                crop_w_px = cx1 - cx0
+                crop_h_px = cy1 - cy0
+                crop_box = [cx0, cy0, cx1, cy1]
             return {
                 "mask_png_base64": mask_b64,
+                "crop_png_base64": crop_b64,
+                "crop_width": crop_w_px,
+                "crop_height": crop_h_px,
+                "crop_bbox_px": crop_box,
                 "bbox": bbox,
                 "point_x": float(x), "point_y": float(y),
                 "mask_pixel_count": pixel_count,
                 "mask_fill_fraction": round(pixel_count / float(mh * mw), 3),
                 "clicked_category": int(inside_value),
+                "class_name": f"magic_touch_class_{int(inside_value)}",
                 "backend": "magic_touch",
                 "ms": ms,
             }

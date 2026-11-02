@@ -239,6 +239,7 @@
       <div class="ctl" style="margin-top:12px">
         <input id="seg-name" type="text" placeholder="segment name (e.g. refrigerator-dent)" style="min-width:260px;background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:6px 10px;border-radius:4px">
         <button id="seg-save" disabled>Save segment</button>
+        <button id="seg-download" disabled>Download cropped PNG</button>
         <button id="seg-clear" class="sec">Clear</button>
         <span id="seg-status" style="color:var(--muted);font-size:12px;margin-left:12px"></span>
       </div>
@@ -747,7 +748,7 @@ async function startCam() {
               if (sr.mask_png_base64) {
                 camLastMask = {mask: sr.mask_png_base64, bbox: sr.bbox};
                 ps.textContent =
-                  `pinned object: ${sr.mask_pixel_count || 0} px · ${sr.ms || 0} ms`;
+                  `pinned ${sr.class_name || "object"}: ${sr.mask_pixel_count || 0} px · ${sr.ms || 0} ms`;
               } else {
                 ps.innerHTML = `<span style="color:var(--muted)">no segment at that point — try another spot</span>`;
               }
@@ -1251,11 +1252,16 @@ segCanvas.addEventListener("click", async (e) => {
       ((r.mask_fill_fraction || 0) * 100).toFixed(1) + "%";
     document.getElementById("seg-ms").textContent = r.ms;
     document.getElementById("seg-save").disabled = false;
+    document.getElementById("seg-download").disabled = false;
+    if (r.class_name) {
+      document.getElementById("seg-point").textContent = r.class_name;
+    }
     const fillPct = ((r.mask_fill_fraction || 0) * 100).toFixed(0);
+    const backend = r.backend === "segformer" ? "SegFormer" : "magic_touch";
     document.getElementById("seg-status").innerHTML =
       (r.mask_pixel_count === 0)
-        ? `<span style="color:var(--fail)">no object found at that spot — try clicking somewhere inside the object.</span>`
-        : `segmented in ${r.ms} ms (${fillPct}% of frame). Give it a name and Save, or click somewhere else.`;
+        ? `<span style="color:var(--fail)">no object found at that spot — try clicking inside the object.</span>`
+        : `<b>${r.class_name || "object"}</b> segmented in ${r.ms} ms via ${backend} (${fillPct}% of frame). Save, or click somewhere else.`;
   } catch (e) {
     document.getElementById("seg-status").textContent = "error: " + e.message;
   }
@@ -1330,6 +1336,7 @@ async function startSegLive() {
               ((r.mask_fill_fraction || 0) * 100).toFixed(1) + "%";
             document.getElementById("seg-ms").textContent = r.ms;
             document.getElementById("seg-save").disabled = false;
+    document.getElementById("seg-download").disabled = false;
           }
         }).catch(() => {});
       }
@@ -1420,6 +1427,7 @@ document.getElementById("seg-save").onclick = async () => {
     }
     document.getElementById("seg-status").textContent = `saved to ${r.saved_dir}`;
     document.getElementById("seg-save").disabled = true;
+  document.getElementById("seg-download").disabled = true;
     document.getElementById("seg-name").value = "";
     await loadSavedSegments();
   } catch (e) {
@@ -1427,10 +1435,35 @@ document.getElementById("seg-save").onclick = async () => {
   }
 };
 
+// Download cropped PNG (RGBA, cut to bbox, transparent background).
+// Uses the server-side `crop_png_base64` directly — no client-side
+// recomposition, so the file matches exactly what the pipeline sees.
+document.getElementById("seg-download").onclick = () => {
+  if (!segLastResult) return;
+  const crop = segLastResult.crop_png_base64;
+  if (!crop) {
+    document.getElementById("seg-status").textContent =
+      "no cropped image in last response (older backend?). Click to re-segment.";
+    return;
+  }
+  const className = (segLastResult.class_name || "segment")
+    .replace(/[^a-z0-9_-]/gi, "_");
+  const px = segLastResult.mask_pixel_count || 0;
+  const a = document.createElement("a");
+  a.href = "data:image/png;base64," + crop;
+  a.download = `arikizu_${className}_${segLastResult.crop_width || "W"}x${segLastResult.crop_height || "H"}_${px}px.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  document.getElementById("seg-status").innerHTML =
+    `downloaded <b>${className}</b> (${segLastResult.crop_width}x${segLastResult.crop_height}, ${px} px) via ${segLastResult.backend}`;
+};
+
 document.getElementById("seg-clear").onclick = () => {
   drawSegBase();
   segLastResult = null;
   document.getElementById("seg-save").disabled = true;
+  document.getElementById("seg-download").disabled = true;
   document.getElementById("seg-status").textContent = "cleared";
 };
 
