@@ -543,10 +543,10 @@ def add(a: float, b: float) -> dict:
     return {"result": a + b}
 ```
 
-**File 2 — Registry entry** in `capabilities.d/`:
+**File 2 — Registry entry** in `capabilities/`:
 
 ```toml
-# capabilities.d/my_math.toml
+# capabilities/my_math.toml
 [my_add]
 name = "my.add"
 worker = "custom"
@@ -559,7 +559,7 @@ timeout_ms = 5000
 and hot-reloads in ~1 second. No restart. Your capability is live
 at `POST /api/v1/call/my/add`. It's visible
 to the HTTP API, to agents, to YAML pipelines, and to external MCP
-clients. A working example (`custom/hello.py` + `capabilities.d/hello.toml`)
+clients. A working example (`custom/hello.py` + `capabilities/hello.toml`)
 ships in the box. See [`custom/README.md`](custom/README.md) for the
 full guide.
 
